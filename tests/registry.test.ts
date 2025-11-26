@@ -34,4 +34,30 @@ describe('Registry (TypeScript)', () => {
       registry.upsert({ role: 'worker' } as unknown as { thread_id: string })
     ).rejects.toThrow('thread_id is required');
   });
+
+  it('updates existing thread metadata while preserving stored fields', async () => {
+    const paths = await createPaths();
+    await paths.ensure();
+    const registry = new Registry(paths);
+    await registry.upsert({
+      thread_id: 'thread-1',
+      role: 'researcher',
+      policy: 'research-readonly',
+      status: 'running',
+      last_message_id: 'msg-old',
+    });
+
+    const updated = await registry.updateThread('thread-1', {
+      status: 'waiting',
+      last_message_id: 'msg-new',
+    });
+
+    expect(updated.status).toBe('waiting');
+    expect(updated.last_message_id).toBe('msg-new');
+    expect(updated.role).toBe('researcher');
+
+    const again = await registry.get('thread-1');
+    expect(again?.policy).toBe('research-readonly');
+    expect(again?.last_message_id).toBe('msg-new');
+  });
 });

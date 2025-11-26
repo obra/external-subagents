@@ -10,9 +10,23 @@
 
 ---
 
+## Current State (2025-11-26)
+
+- Python scaffolding (`Paths`, `Registry`, pytest coverage) is merged and green under `pytest -q`.
+- TypeScript toolchain (Node 20+, npm, tsup bundle, Vitest, ESLint flat config, Prettier, `prek`) is wired with passing `npm run format:fix && npm run lint && npm run typecheck && npm run test`.
+- CLI entry (`codex-subagent`) currently exposes only the `list` command; it lists threads without mutating state and surfaces registry errors to stderr.
+- CLI entry (`codex-subagent`) now includes `start`, `send`, and `pull`; stateful commands validate metadata, stream logs as NDJSON, and forbid "allow everything" policies.
+- Registry/paths helpers never create directories on read, use atomic writes, and protect against malformed JSON (raising `RegistryLoadError`).
+- Manual dry runs of `codex exec` informed the need for prompt files, bootstrap hints, and immediate thread ID tracking; these requirements feed directly into Task 4.
+
+---
+
 ### Task 1: Project Scaffolding & Utilities
 
+**Status (2025-11-26):** ✅ Completed. Python scaffolding (pyproject + `Paths` helper + first pytest) is in `main`; tests pass via `pytest tests/test_paths.py -q`.
+
 **Files:**
+
 - Create: `pyproject.toml`
 - Create: `src/codex_subagent/__init__.py`
 - Create: `src/codex_subagent/paths.py`
@@ -70,6 +84,7 @@ git commit -m "chore: scaffold codex-subagent project"
 ```
 
 **Field notes after manual subagent dry run**
+
 - Every fresh `codex exec` thread immediately asked for bootstrap + plan context. Future commands (Task 4 onward) MUST package the relevant task snippet automatically so subagents can act without extra clarification.
 - Inline prompts with quotes/backticks confused the shell. The CLI should always write prompt bodies to a temp file (or equivalent) before invoking `codex exec` to prevent glob/quote issues.
 - We need to pass an explicit “bootstrap already satisfied” hint inside the prompt to keep subagents from re-running it every turn.
@@ -79,7 +94,10 @@ git commit -m "chore: scaffold codex-subagent project"
 
 ### Task 2: Thread Registry Module
 
+**Status (2025-11-26):** ✅ Completed with hardened loader/upsert semantics. Python registry now raises `RegistryLoadError` for malformed JSON, deep-copies thread metadata, and enforces `thread_id`. Verified by `pytest tests/test_registry.py -q` plus follow-up safety tests.
+
 **Files:**
+
 - Create: `src/codex_subagent/registry.py`
 - Create: `tests/test_registry.py`
 
@@ -158,7 +176,19 @@ class Registry:
 
 ### Task 3: TypeScript Project Scaffolding & `list` CLI Skeleton
 
+**Status (2025-11-26):** ✅ Completed on branch `t1-paths-scaffolding` (commits `4511ad5` + `d0ab456`). Node/TS toolchain (npm scripts, tsup bundle, vitest, ESLint flat config, Prettier, `.prek.toml`) is live. TS ports for `Paths`/`Registry`, CLI entry (`codex-subagent`) and the `list` command ship with Vitest coverage (`tests/list-command.test.ts`, `tests/registry.test.ts`). Latest verification:
+
+```
+npm run format:fix
+npm run lint
+npm run typecheck
+npm run test
+```
+
+All succeed under Node 24.8 / npm 11.6.
+
 **Files:**
+
 - Create: `package.json`, `tsconfig.json`, `tsup.config.ts`
 - Create: `src/bin/codex-subagent.ts` (entrypoint)
 - Create: `src/lib/paths.ts`, `src/lib/registry.ts` (TypeScript ports of existing logic)
@@ -168,6 +198,7 @@ class Registry:
 - Pre-commit: `.prek.toml`
 
 **Step 1:** Initialize `package.json` via `npm init -y`, then edit to add scripts:
+
 ```json
 {
   "scripts": {
@@ -199,7 +230,19 @@ class Registry:
 
 ### Task 4: `start` Command + Exec Runner (TypeScript)
 
+**Status (2025-11-26):** ✅ Completed – `start` now shells through `execRunner` (execa) with NDJSON logging, registry upsert, and CLI flag parsing for role/policy/prompt/output.
+
+**Latest verification (2025-11-26 15:25 local):**
+
+```
+npm run format:fix
+npm run lint
+npm run typecheck
+npm run test
+```
+
 **Files:**
+
 - Modify: `src/bin/codex-subagent.ts`
 - Create: `src/lib/exec-runner.ts`
 - Create: `tests/start-command.test.ts`
@@ -217,7 +260,10 @@ class Registry:
 
 ### Task 5: `send` & `pull` Commands with Logging
 
+**Status (2025-11-26):** ✅ Completed – resume commands now share the exec runner, append NDJSON logs, and keep `last_message_id` in sync via a new `Registry.updateThread` helper.
+
 **Files:**
+
 - Modify: `src/bin/codex-subagent.ts`
 - Add: `src/commands/send.ts`, `src/commands/pull.ts`
 - Add tests: `tests/send-command.test.ts`, `tests/pull-command.test.ts`
@@ -233,7 +279,10 @@ class Registry:
 
 ### Task 6: `show-log` Command & Watch Mode + Scripts
 
+**Status (2025-11-26):** ⏳ Blocked on Tasks 4–5.
+
 **Files:**
+
 - Add `src/commands/show-log.ts`, `src/commands/watch.ts`
 - Tests: `tests/show-log-command.test.ts`
 - Scripts: `scripts/demo-start-and-pull.ts` (tsx runnable)
@@ -248,7 +297,10 @@ class Registry:
 
 ### Task 7: Documentation, npm Scripts, and Verification
 
+**Status (2025-11-26):** ⏳ Pending final CLI feature set.
+
 **Files:**
+
 - Update `README.md` with install/build/test instructions, CLI usage examples, and policies about never using “allow everything.”
 - Add `docs/codex-subagent-workflow.md` describing async subagent lifecycle.
 - Ensure `package-lock.json` committed.

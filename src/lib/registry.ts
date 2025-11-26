@@ -61,6 +61,32 @@ export class Registry {
     return entry;
   }
 
+  async updateThread(
+    threadId: string,
+    updates: Partial<Omit<ThreadMetadata, 'thread_id'>>
+  ): Promise<ThreadMetadata> {
+    const trimmed = threadId?.trim();
+    if (!trimmed) {
+      throw new Error('thread_id is required');
+    }
+    const data = await this.readAll();
+    const existing = data[trimmed];
+    if (!existing) {
+      throw new Error(`Thread ${threadId} not found in registry`);
+    }
+
+    const entry: ThreadMetadata = {
+      ...existing,
+      ...updates,
+      thread_id: trimmed,
+      updated_at: updates.updated_at ?? new Date().toISOString(),
+    };
+
+    data[trimmed] = entry;
+    await this.writeAll(data);
+    return entry;
+  }
+
   private async readAll(): Promise<ThreadMap> {
     let contents: string;
     try {

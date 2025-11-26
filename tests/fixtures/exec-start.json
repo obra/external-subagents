@@ -1,0 +1,18 @@
+{
+  "thread_id": "thread-123",
+  "last_message_id": "msg-last",
+  "status": "running",
+  "messages": [
+    {
+      "id": "msg-last",
+      "role": "assistant",
+      "created_at": "2025-11-26T15:00:00Z",
+      "content": [
+        {
+          "type": "text",
+          "text": "All systems nominal."
+        }
+      ]
+    }
+  ]
+}

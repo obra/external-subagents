@@ -20,6 +20,10 @@ export class Paths {
     return path.join(this.stateDir, 'threads.json');
   }
 
+  logFile(threadId: string): string {
+    return path.join(this.logsDir, `${threadId}.ndjson`);
+  }
+
   async ensure(): Promise<void> {
     await Promise.all([
       mkdir(this.stateDir, { recursive: true }),
