@@ -1,0 +1,7 @@
+[hooks.pre-commit]
+steps = [
+  { run = "npm run lint" },
+  { run = "npm run format" },
+  { run = "npm run typecheck" },
+  { run = "npm run test" }
+]

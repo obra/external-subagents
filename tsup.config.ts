@@ -1,0 +1,13 @@
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  entry: ['src/bin/codex-subagent.ts'],
+  format: ['esm', 'cjs'],
+  sourcemap: true,
+  clean: true,
+  target: 'node20',
+  outDir: 'dist',
+  splitting: false,
+  shims: false,
+  banner: { js: '#!/usr/bin/env node' },
+});
