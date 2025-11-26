@@ -7,3 +7,4 @@ def test_paths_create_directories(tmp_path):
     paths.ensure()
     assert (base / "state").is_dir()
     assert (base / "logs").is_dir()
+    assert paths.state_file == base / "state" / "threads.json"
