@@ -32,7 +32,6 @@ function formatThreadLine(thread: {
 export async function listCommand(options: ListCommandOptions = {}): Promise<void> {
   const stdout = options.stdout ?? process.stdout;
   const paths = new Paths(options.rootDir);
-  await paths.ensure();
   const registry = new Registry(paths);
   const threads = await registry.listThreads();
 

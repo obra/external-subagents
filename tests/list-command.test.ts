@@ -4,6 +4,7 @@ import { Writable } from 'node:stream';
 import os from 'node:os';
 import path from 'node:path';
 import { listCommand } from '../src/commands/list.ts';
+import { RegistryLoadError } from '../src/lib/registry.ts';
 
 const sampleThread = {
   thread_id: 'T-123',
@@ -62,5 +63,14 @@ describe('list command', () => {
     });
 
     expect(output.join('')).toContain('No threads found');
+  });
+
+  it('bubbles RegistryLoadError for malformed JSON', async () => {
+    const root = await createStateFixture();
+    const registryPath = path.join(root, '.codex-subagent', 'state', 'threads.json');
+    await writeFile(registryPath, '{not-json', 'utf8');
+    await expect(
+      listCommand({ rootDir: path.join(root, '.codex-subagent') })
+    ).rejects.toBeInstanceOf(RegistryLoadError);
   });
 });

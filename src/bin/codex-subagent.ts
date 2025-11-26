@@ -1,6 +1,7 @@
 import process from 'node:process';
 import path from 'node:path';
 import { listCommand } from '../commands/list.ts';
+import { RegistryLoadError } from '../lib/registry.ts';
 
 interface ParsedArgs {
   command: string;
@@ -48,7 +49,16 @@ async function run(): Promise<void> {
 
   switch (command) {
     case 'list':
-      await listCommand({ rootDir });
+      try {
+        await listCommand({ rootDir });
+      } catch (error) {
+        if (error instanceof RegistryLoadError) {
+          process.stderr.write(`${error.message}\n`);
+          process.exitCode = 1;
+        } else {
+          throw error;
+        }
+      }
       break;
     case 'help':
     case '--help':

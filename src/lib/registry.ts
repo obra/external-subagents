@@ -3,6 +3,16 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Paths } from './paths.ts';
 
+export class RegistryLoadError extends Error {
+  readonly cause?: unknown;
+
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'RegistryLoadError';
+    this.cause = cause;
+  }
+}
+
 export interface ThreadMetadata {
   thread_id: string;
   role?: string;
@@ -35,37 +45,58 @@ export class Registry {
   }
 
   async upsert(thread: ThreadMetadata): Promise<ThreadMetadata> {
+    const threadId = thread.thread_id?.trim();
+    if (!threadId) {
+      throw new Error('thread_id is required');
+    }
     const data = await this.readAll();
     const entry: ThreadMetadata = {
-      ...data[thread.thread_id],
+      ...data[threadId],
       ...thread,
+      thread_id: threadId,
       updated_at: thread.updated_at ?? new Date().toISOString(),
     };
-    data[thread.thread_id] = entry;
+    data[threadId] = entry;
     await this.writeAll(data);
     return entry;
   }
 
   private async readAll(): Promise<ThreadMap> {
+    let contents: string;
     try {
-      const contents = await readFile(this.paths.threadsFile, 'utf8');
-      if (!contents.trim()) {
-        return {};
-      }
-      const parsed = JSON.parse(contents);
-      if (Array.isArray(parsed)) {
-        return parsed.reduce<ThreadMap>((acc, thread) => {
-          acc[thread.thread_id] = thread;
-          return acc;
-        }, {});
-      }
-      return parsed as ThreadMap;
+      contents = await readFile(this.paths.threadsFile, 'utf8');
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return {};
       }
-      throw error;
+      throw new RegistryLoadError(`Failed to read registry from ${this.paths.threadsFile}`, error);
     }
+
+    if (!contents.trim()) {
+      return {};
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(contents);
+    } catch (error: unknown) {
+      throw new RegistryLoadError('Registry JSON is malformed', error);
+    }
+
+    if (Array.isArray(parsed)) {
+      return parsed.reduce<ThreadMap>((acc, thread) => {
+        if (thread?.thread_id) {
+          acc[thread.thread_id] = thread;
+        }
+        return acc;
+      }, {});
+    }
+
+    if (parsed && typeof parsed === 'object') {
+      return parsed as ThreadMap;
+    }
+
+    throw new RegistryLoadError('Registry file must contain an object map');
   }
 
   private async writeAll(data: ThreadMap): Promise<void> {
