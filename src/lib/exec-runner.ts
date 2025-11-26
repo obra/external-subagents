@@ -82,7 +82,9 @@ export async function runExec(options: ExecOptions): Promise<ExecResult> {
     try {
       event = JSON.parse(line);
     } catch (error) {
-      throw new Error(`Failed to parse codex exec JSON line: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to parse codex exec JSON line: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     if (!isRecord(event)) {
@@ -95,7 +97,11 @@ export async function runExec(options: ExecOptions): Promise<ExecResult> {
       threadId = event.thread_id;
     }
 
-    if (eventType === 'item.completed' && isRecord(event.item) && event.item.type === 'agent_message') {
+    if (
+      eventType === 'item.completed' &&
+      isRecord(event.item) &&
+      event.item.type === 'agent_message'
+    ) {
       const item = event.item as Record<string, unknown> & { type: string };
       const rawPayload = JSON.stringify(item);
       const fingerprint = createHash('sha256').update(rawPayload).digest('hex');
