@@ -69,6 +69,12 @@ git add pyproject.toml src/codex_subagent tests/test_paths.py
 git commit -m "chore: scaffold codex-subagent project"
 ```
 
+**Field notes after manual subagent dry run**
+- Every fresh `codex exec` thread immediately asked for bootstrap + plan context. Future commands (Task 4 onward) MUST package the relevant task snippet automatically so subagents can act without extra clarification.
+- Inline prompts with quotes/backticks confused the shell. The CLI should always write prompt bodies to a temp file (or equivalent) before invoking `codex exec` to prevent glob/quote issues.
+- We need to pass an explicit “bootstrap already satisfied” hint inside the prompt to keep subagents from re-running it every turn.
+- Thread IDs are unwieldy to juggle manually; when Task 4 stores metadata it should record thread IDs immediately and allow follow-up commands to default to the most recent thread unless overridden.
+
 ---
 
 ### Task 2: Thread Registry Module
