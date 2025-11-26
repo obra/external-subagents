@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -12,10 +14,13 @@ class Registry:
         self._load()
 
     def list_threads(self) -> List[dict]:
-        return list(self._threads.values())
+        return [dict(thread) for thread in self._threads.values()]
 
     def get(self, thread_id: str) -> Optional[dict]:
-        return self._threads.get(str(thread_id))
+        found = self._threads.get(str(thread_id))
+        if found is None:
+            return None
+        return dict(found)
 
     def upsert(self, thread: Dict[str, object]) -> None:
         thread_id = thread.get("thread_id")
@@ -35,7 +40,7 @@ class Registry:
                     self._threads = {}
                     return
                 data = json.loads(raw)
-        except json.JSONDecodeError:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             self._threads = {}
             return
         if not isinstance(data, dict):
@@ -45,5 +50,25 @@ class Registry:
 
     def _persist(self) -> None:
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        with self.state_file.open("w", encoding="utf-8") as handle:
-            json.dump(self._threads, handle, indent=2, sort_keys=True)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=self.state_file.parent,
+            prefix=f".{self.state_file.name}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(self._threads, handle, indent=2, sort_keys=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, self.state_file)
+            dir_fd = os.open(self.state_file.parent, os.O_DIRECTORY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
