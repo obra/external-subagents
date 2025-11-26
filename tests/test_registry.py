@@ -1,13 +1,16 @@
 from pathlib import Path
 
+import pytest
+
 from codex_subagent.paths import Paths
-from codex_subagent.registry import Registry
+from codex_subagent.registry import Registry, RegistryLoadError
 
 sample_thread = {
     "thread_id": "123",
     "role": "researcher",
     "status": "running",
     "title": "Exploratory thread",
+    "metadata": {"notes": ["alpha"]},
 }
 
 
@@ -40,6 +43,8 @@ def test_registry_returns_copy_when_mutated(tmp_path):
     listed = reg.list_threads()
     listed[0]["role"] = "changed"
     assert reg.get("123")["role"] == "researcher"
+    fetched["metadata"]["notes"].append("beta")
+    assert reg.get("123")["metadata"]["notes"] == ["alpha"]
 
 
 def test_registry_handles_corrupt_files(tmp_path):
@@ -48,8 +53,8 @@ def test_registry_handles_corrupt_files(tmp_path):
     state_file = paths.state_file
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text("{not-json", encoding="utf-8")
-    reg = Registry(state_file)
-    assert reg.list_threads() == []
+    with pytest.raises(RegistryLoadError):
+        Registry(state_file)
 
 
 def test_registry_handles_oserror(monkeypatch, tmp_path):
@@ -65,5 +70,5 @@ def test_registry_handles_oserror(monkeypatch, tmp_path):
         return real_open(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", boom)
-    reg = Registry(state_file)
-    assert reg.list_threads() == []
+    with pytest.raises(RegistryLoadError):
+        Registry(state_file)

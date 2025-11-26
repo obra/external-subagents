@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
+
+
+class RegistryLoadError(RuntimeError):
+    """Raised when the registry cannot be loaded safely from disk."""
 
 
 class Registry:
@@ -14,13 +19,13 @@ class Registry:
         self._load()
 
     def list_threads(self) -> List[dict]:
-        return [dict(thread) for thread in self._threads.values()]
+        return [copy.deepcopy(thread) for thread in self._threads.values()]
 
     def get(self, thread_id: str) -> Optional[dict]:
         found = self._threads.get(str(thread_id))
         if found is None:
             return None
-        return dict(found)
+        return copy.deepcopy(found)
 
     def upsert(self, thread: Dict[str, object]) -> None:
         thread_id = thread.get("thread_id")
@@ -40,9 +45,13 @@ class Registry:
                     self._threads = {}
                     return
                 data = json.loads(raw)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        except FileNotFoundError:
             self._threads = {}
             return
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RegistryLoadError(
+                f"Failed to load registry from {self.state_file}: {exc}"
+            ) from exc
         if not isinstance(data, dict):
             self._threads = {}
             return
@@ -61,11 +70,17 @@ class Registry:
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(tmp_path, self.state_file)
-            dir_fd = os.open(self.state_file.parent, os.O_DIRECTORY)
-            try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
+            dir_fd = None
+            directory_flag = getattr(os, "O_DIRECTORY", None)
+            if directory_flag is not None:
+                try:
+                    dir_fd = os.open(self.state_file.parent, directory_flag)
+                    os.fsync(dir_fd)
+                except OSError:
+                    pass
+                finally:
+                    if dir_fd is not None:
+                        os.close(dir_fd)
         finally:
             if os.path.exists(tmp_path):
                 try:
