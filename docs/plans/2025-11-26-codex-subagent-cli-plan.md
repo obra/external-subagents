@@ -260,7 +260,7 @@ npm run test
 
 ### Task 5: `send` & `pull` Commands with Logging
 
-**Status (2025-11-26):** ✅ Completed – resume commands now share the exec runner, append NDJSON logs, and keep `last_message_id` in sync via a new `Registry.updateThread` helper.
+**Status (2025-11-26):** ✅ Completed – resume commands now share the exec runner, append NDJSON logs, and keep `last_message_id` in sync via a new `Registry.updateThread` helper. Manual smoke (2025-11-26 15:45 local) confirmed `start`/`send` flows work end-to-end against the real Codex CLI. `codex exec resume` still requires a prompt body, so the current `pull` prototype cannot poll passively; follow-up design is needed if we want a zero-message “check for updates” action.
 
 **Files:**
 
