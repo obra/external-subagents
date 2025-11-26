@@ -50,8 +50,7 @@ describe('start command', () => {
 
     expect(runExec).toHaveBeenCalledWith({
       promptFile,
-      role: 'researcher',
-      policy: 'research-readonly',
+      profile: 'research-readonly',
       outputLastPath,
     });
 

@@ -5,6 +5,7 @@ import { Paths } from '../lib/paths.ts';
 import { Registry } from '../lib/registry.ts';
 import { appendMessages } from '../lib/logs.ts';
 import { runExec } from '../lib/exec-runner.ts';
+import { resolvePolicy } from '../lib/policy.ts';
 
 export interface SendCommandOptions {
   rootDir?: string;
@@ -44,13 +45,13 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
   const registry = new Registry(paths);
   const thread = await registry.get(options.threadId);
   ensureThreadMetadata(options.threadId, thread);
+  const policyConfig = resolvePolicy(thread!.policy!);
 
   const execResult = await runExec({
     promptFile: path.resolve(options.promptFile),
-    role: thread!.role!,
-    policy: thread!.policy!,
     outputLastPath: options.outputLastPath,
     extraArgs: ['resume', options.threadId],
+    ...policyConfig,
   });
 
   const logPath = paths.logFile(options.threadId);

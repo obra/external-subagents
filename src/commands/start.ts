@@ -4,6 +4,7 @@ import { Paths } from '../lib/paths.ts';
 import { Registry } from '../lib/registry.ts';
 import { runExec } from '../lib/exec-runner.ts';
 import { appendMessages } from '../lib/logs.ts';
+import { resolvePolicy } from '../lib/policy.ts';
 
 export interface StartCommandOptions {
   rootDir?: string;
@@ -29,11 +30,11 @@ export async function startCommand(options: StartCommandOptions): Promise<string
   const paths = new Paths(options.rootDir);
   await paths.ensure();
 
+  const policyConfig = resolvePolicy(options.policy);
   const execResult = await runExec({
     promptFile: options.promptFile,
-    role: options.role,
-    policy: options.policy,
     outputLastPath: options.outputLastPath,
+    ...policyConfig,
   });
 
   const registry = new Registry(paths);

@@ -17,19 +17,23 @@ export interface ExecResult {
 
 export interface ExecOptions {
   promptFile: string;
-  role: string;
-  policy: string;
   outputLastPath?: string;
   extraArgs?: string[];
+  sandbox?: string;
+  profile?: string;
 }
 
 function buildArgs(options: ExecOptions): string[] {
   const args = ['exec', '--json', '--skip-git-repo-check'];
-  args.push('--role', options.role.trim());
-  args.push('--policy', options.policy.trim());
   args.push('--prompt-file', path.resolve(options.promptFile));
   if (options.outputLastPath) {
     args.push('--output-last-message', path.resolve(options.outputLastPath));
+  }
+  if (options.sandbox) {
+    args.push('--sandbox', options.sandbox);
+  }
+  if (options.profile) {
+    args.push('--profile', options.profile);
   }
   if (options.extraArgs && options.extraArgs.length > 0) {
     args.push(...options.extraArgs);

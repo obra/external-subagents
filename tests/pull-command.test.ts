@@ -35,7 +35,7 @@ describe('pull command', () => {
     await registry.upsert({
       thread_id: 'thread-123',
       role: 'researcher',
-      policy: 'research-readonly',
+      policy: 'workspace-write',
       status: 'running',
       last_message_id: 'msg-old',
     });
@@ -56,6 +56,7 @@ describe('pull command', () => {
     expect(call.extraArgs).toEqual(['resume', 'thread-123']);
     expect(call.outputLastPath).toBe(outputLastPath);
     expect(call.promptFile).toBeTruthy();
+    expect(call.sandbox).toBe('workspace-write');
 
     const logPath = path.join(codexRoot, 'logs', 'thread-123.ndjson');
     const logRaw = await readFile(logPath, 'utf8');
@@ -76,7 +77,7 @@ describe('pull command', () => {
     await registry.upsert({
       thread_id: 'thread-123',
       role: 'researcher',
-      policy: 'research-readonly',
+      policy: 'workspace-write',
       status: 'running',
       last_message_id: 'msg-old',
     });

@@ -7,6 +7,7 @@ import { Paths } from '../lib/paths.ts';
 import { Registry } from '../lib/registry.ts';
 import { appendMessages } from '../lib/logs.ts';
 import { runExec } from '../lib/exec-runner.ts';
+import { resolvePolicy } from '../lib/policy.ts';
 
 export interface PullCommandOptions {
   rootDir?: string;
@@ -43,15 +44,15 @@ export async function pullCommand(options: PullCommandOptions): Promise<void> {
   const registry = new Registry(paths);
   const thread = await registry.get(options.threadId);
   ensureThread(options.threadId, thread);
+  const policyConfig = resolvePolicy(thread!.policy!);
 
   const { dir, file } = await createEmptyPromptFile();
   try {
     const execResult = await runExec({
       promptFile: file,
-      role: thread!.role!,
-      policy: thread!.policy!,
       outputLastPath: options.outputLastPath,
       extraArgs: ['resume', options.threadId],
+      ...policyConfig,
     });
 
     const latestId = execResult.last_message_id;

@@ -40,7 +40,7 @@ describe('send command', () => {
     await registry.upsert({
       thread_id: 'thread-123',
       role: 'researcher',
-      policy: 'research-readonly',
+      policy: 'workspace-write',
       status: 'running',
       last_message_id: 'msg-old',
     });
@@ -63,8 +63,7 @@ describe('send command', () => {
 
     expect(runExec).toHaveBeenCalledWith({
       promptFile,
-      role: 'researcher',
-      policy: 'research-readonly',
+      sandbox: 'workspace-write',
       outputLastPath,
       extraArgs: ['resume', 'thread-123'],
     });
