@@ -4,9 +4,9 @@
 
 **Goal:** Provide a CLI (`codex-subagent`) that launches, tracks, and interacts with Codex `exec` threads so the main agent can run asynchronous, sandboxed subagents without bloating the active context.
 
-**Architecture:** A Python CLI (argparse + stdlib) stores thread metadata as JSON under `.codex-subagent/state` and conversation logs as newline-delimited JSON. Each command shells out to `codex exec --json --skip-git-repo-check ...` with explicit policy flags, parses the resulting JSON, and updates the registry. Commands remain thin wrappers so future automation layers can reuse the modules.
+**Architecture:** A TypeScript CLI (Node 20+, bundled via `tsup` into a single executable JS file) stores thread metadata as JSON under `.codex-subagent/state` and conversation logs as newline-delimited JSON. Each command shells out to `codex exec --json --skip-git-repo-check ...` with explicit policy flags, parses the resulting JSON, and updates the registry. Commands remain thin wrappers so future automation layers can reuse the modules. Distribution is via `npm` scripts with lint/format/test automation and `prek` enforced pre-commit checks.
 
-**Tech Stack:** Python 3.11+, `argparse`, `subprocess`, `json`, `pathlib`, `pytest` for tests, fixture files for mock `codex exec` output.
+**Tech Stack:** TypeScript 5.x, Node 20+, `tsup` for bundling, `eslint` + `@typescript-eslint`, `prettier`, `vitest` for unit tests, `tsx` for local dev, `npm` as the package manager, and `prek` for lint/test/format enforcement.
 
 ---
 
@@ -156,194 +156,113 @@ class Registry:
 
 ---
 
-### Task 3: CLI Skeleton + `list` Command
+### Task 3: TypeScript Project Scaffolding & `list` CLI Skeleton
 
 **Files:**
-- Create: `src/codex_subagent/cli.py`
-- Modify: `pyproject.toml` (add entry point)
-- Create: `tests/test_cli_list.py`
+- Create: `package.json`, `tsconfig.json`, `tsup.config.ts`
+- Create: `src/bin/codex-subagent.ts` (entrypoint)
+- Create: `src/lib/paths.ts`, `src/lib/registry.ts` (TypeScript ports of existing logic)
+- Create: `src/commands/list.ts`
+- Create: `tests/list-command.test.ts` (vitest)
+- Config: `.eslintrc.cjs`, `.prettierrc`, `.npmrc`, `.editorconfig`
+- Pre-commit: `.prek.toml`
 
-**Step 1: Write failing CLI test**
-
-```python
-# tests/test_cli_list.py
-from pathlib import Path
-from subprocess import run, PIPE
-
-def test_list_shows_threads(tmp_path):
-    state_dir = tmp_path / ".codex-subagent" / "state"
-    state_dir.mkdir(parents=True)
-    (state_dir / "threads.json").write_text(
-        '{"abc":{"thread_id":"abc","role":"research","status":"running"}}'
-    )
-    result = run(
-        ["python", "-m", "codex_subagent.cli", "list", f"--root={tmp_path / '.codex-subagent'}"],
-        stdout=PIPE,
-        text=True,
-        check=False,
-    )
-    assert "abc" in result.stdout
+**Step 1:** Initialize `package.json` via `npm init -y`, then edit to add scripts:
+```json
+{
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/bin/codex-subagent.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepare": "prek install"
+  },
+  "type": "module"
+}
 ```
 
-**Step 2:** Run test, expect `ModuleNotFoundError`.
+**Step 2:** Install dev deps with npm: `npm install --save-dev typescript tsup tsx vitest @vitest/coverage-istanbul eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin prettier eslint-config-prettier eslint-plugin-jest npm-run-all chokidar prek`. Also install runtime deps if needed (`npm install execa fs-extra zod` as we add features).
 
-**Step 3: Implement CLI skeleton**
+**Step 3:** Add `tsconfig.json` targeting Node 20 (`moduleResolution": "nodeNext"`, `rootDir": "src"`, `outDir": "dist"`). Configure `tsup.config.ts` for single-file CLI bundle with shebang, externalizing `node_modules`.
 
-```python
-# src/codex_subagent/cli.py
-import argparse
-from codex_subagent.paths import Paths
-from codex_subagent.registry import Registry
+**Step 4:** Port `Paths`/`Registry` helpers into TypeScript (`src/lib/paths.ts`, `src/lib/registry.ts`) mirroring the Python behavior (include unit tests later). Add `src/bin/codex-subagent.ts` that wires `commander`-style manual parsing (or minimal custom parser) but for now only supports `list` command delegating to `src/commands/list.ts`.
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="codex-subagent")
-    parser.add_argument("command", choices=["list"], help="Command to execute")
-    parser.add_argument("--root", default=".codex-subagent", dest="root")
-    return parser
+**Step 5:** Write `tests/list-command.test.ts` using vitest + temp dirs to assert `list` prints thread IDs from `.codex-subagent/state/threads.json`. Run `npm run test` (expect failure until implementation done), implement command, rerun expecting pass.
 
-
-def cmd_list(paths: Paths) -> None:
-    reg = Registry(paths.state_file)
-    for thread in reg.list_threads():
-        print(f"{thread['thread_id']}\t{thread['role']}\t{thread.get('status','?')}")
-
-
-def main(argv=None):
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    paths = Paths(Path(args.root))
-    paths.ensure()
-    if args.command == "list":
-        cmd_list(paths)
-
-if __name__ == "__main__":
-    main()
-```
-
-**Step 4:** `pytest tests/test_cli_list.py -q`
-
-**Step 5:** `git add src/codex_subagent/cli.py tests/test_cli_list.py pyproject.toml && git commit -m "feat: add CLI list command"`
+**Step 6:** Configure ESLint, Prettier, and `prek` (`.prek.toml` referencing `npm run lint`, `npm run format`, `npm run test`, `npm run typecheck`). Add `npm run format:fix` to format code before first commit. Commit scaffolding.
 
 ---
 
-### Task 4: `start` Command (launch codex exec)
+### Task 4: `start` Command + Exec Runner (TypeScript)
 
 **Files:**
-- Modify: `src/codex_subagent/cli.py`
-- Create: `src/codex_subagent/exec_runner.py`
-- Create: `tests/test_cli_start.py`
-- Add fixture file: `tests/fixtures/exec_start.json`
+- Modify: `src/bin/codex-subagent.ts`
+- Create: `src/lib/exec-runner.ts`
+- Create: `tests/start-command.test.ts`
+- Fixtures: `tests/fixtures/exec-start.json`
 
-**Step 1: Write failing test**
+**Step 1:** Write vitest covering `codex-subagent start --role researcher --policy research-readonly --prompt-file prompt.txt --output-last message.txt`, stubbing `execRunner.runExec` to return fixture JSON. Assert registry updated + log file path stored.
 
-```python
-# tests/test_cli_start.py
-import json
-from pathlib import Path
-from subprocess import run, PIPE
+**Step 2:** Implement `execRunner` using `execa` to call `codex exec --json --skip-git-repo-check ...`, returning parsed JSON + capturing `thread_id`. Ensure prompts are read from files (per earlier pain point). Add `--no-bootstrap-needed` hint to prompt body.
 
-FIXTURE = Path(__file__).parent / "fixtures" / "exec_start.json"
+**Step 3:** Update CLI to support `start` flags, including defaulting `--root` to `.codex-subagent`, writing logs/registry via TS helpers, printing assigned thread ID.
 
-
-def test_start_records_thread(tmp_path, monkeypatch):
-    (tmp_path / "fixtures").mkdir(exist_ok=True)
-
-    def fake_run(cmd, capture_output, text, check):
-        return subprocess.CompletedProcess(cmd, 0, FIXTURE.read_text(), "")
-
-    monkeypatch.setattr(exec_runner, "run_exec", fake_run)
-
-    result = run([...], stdout=PIPE, text=True)
-    state = json.loads((tmp_path / ".codex-subagent/state/threads.json").read_text())
-    assert state["thread-123"]["role"] == "researcher"
-```
-
-(Include actual argv invoking `start` with role + prompt.)
-
-**Step 2:** Run test → FAIL because `start` not implemented.
-
-**Step 3: Implement `exec_runner.run_exec` that shells out to `codex exec --json --skip-git-repo-check ...` and parse JSON. Update CLI to accept `start --role <role> --policy <policy> --output-last <file> --prompt "..."`.**
-
-```python
-# src/codex_subagent/exec_runner.py
-import json
-import subprocess
-from pathlib import Path
-from typing import Sequence
-
-CMD_BASE = ["codex", "exec", "--json", "--skip-git-repo-check"]
-
-
-def run_exec(prompt: str, extra_args: Sequence[str] = ()) -> dict:
-    proc = subprocess.run(
-        [*CMD_BASE, prompt, *extra_args], capture_output=True, text=True, check=True
-    )
-    return json.loads(proc.stdout)
-```
-
-CLI `start` subcommand parses fields, writes new thread entry `{thread_id, role, policy, status: "running", last_message_id}` and prints thread ID.
-
-**Step 4:** `pytest tests/test_cli_start.py -q`
-
-**Step 5:** Commit.
+**Step 4:** `npm run test -- start-command.test.ts` (fail → implement → pass). Lint + typecheck. Commit.
 
 ---
 
-### Task 5: `send` + `pull` + Log Appends
+### Task 5: `send` & `pull` Commands with Logging
 
 **Files:**
-- Modify: `src/codex_subagent/cli.py`
-- Modify: `src/codex_subagent/registry.py` (add update helpers)
-- Create: `tests/test_cli_send.py`, `tests/test_cli_pull.py`
-- Add fixtures: `tests/fixtures/exec_resume_reply.json`
+- Modify: `src/bin/codex-subagent.ts`
+- Add: `src/commands/send.ts`, `src/commands/pull.ts`
+- Add tests: `tests/send-command.test.ts`, `tests/pull-command.test.ts`
+- Add fixtures for resume responses.
 
-**Step 1:** Write failing send test verifying message appended to log file and registry `last_message_id` updated. Write failing pull test verifying command ignores unchanged message IDs.
+**Step 1:** Write failing tests verifying `send` appends NDJSON to `logs/<thread>.ndjson` and updates `last_message_id`, while `pull` only writes when new message ID available and respects `--output-last-message` path.
 
-**Step 2:** Run targeted pytest, expect FAIL.
+**Step 2:** Implement send/pull commands invoking `execRunner.runExec` with `resume <thread>` and optional empty prompt. Ensure log writer handles concurrency via appendFile + newline.
 
-**Step 3:** Implement send/pull commands.
-- `send` loads thread, calls `exec_runner.run_exec(message, ["resume", thread_id])`, records assistant response in `.codex-subagent/logs/<thread>.ndjson`.
-- `pull` call uses empty prompt (""), resume thread, compares response `message_id`. If new, append to log and update registry `last_message_id`.
-
-**Step 4:** Rerun tests.
-
-**Step 5:** Commit.
+**Step 3:** Expand `Registry` TS module with `updateThread` helper (mirroring Python behavior). Rerun targeted tests, plus `npm run lint` and `npm run typecheck`. Commit once green.
 
 ---
 
-### Task 6: `show-log` Command & Smoke Test Script
+### Task 6: `show-log` Command & Watch Mode + Scripts
 
 **Files:**
-- Modify: `src/codex_subagent/cli.py`
-- Create: `tests/test_cli_show_log.py`
-- Create: `scripts/demo_start_and_pull.sh`
+- Add `src/commands/show-log.ts`, `src/commands/watch.ts`
+- Tests: `tests/show-log-command.test.ts`
+- Scripts: `scripts/demo-start-and-pull.ts` (tsx runnable)
 
-**Step 1:** Write failing test verifying `show-log` prints NDJSON entries in order.
+**Step 1:** Write vitest ensuring `show-log` pretty prints NDJSON entries with timestamps, and `watch` polls `pull` on interval (use fake timers/mocks).
 
-**Step 2:** Run pytest fail.
+**Step 2:** Implement commands, ensuring watch reuses `pull` logic and respects ctrl-c.
 
-**Step 3:** Implement simple pretty-printer.
-
-**Step 4:** Run `pytest` for new tests + `scripts/demo_start_and_pull.sh` (manual) to exercise real `codex exec` call with harmless prompt `"What's 2+2?"`.
-
-**Step 5:** Commit.
+**Step 3:** Add manual demo script calling `npm run demo` (wired in package.json) to spawn a harmless thread and tail output via `watch`. Commit.
 
 ---
 
-### Task 7: Documentation & README
+### Task 7: Documentation, npm Scripts, and Verification
 
 **Files:**
-- Create: `README.md`
-- Create: `docs/codex-subagent-workflow.md`
+- Update `README.md` with install/build/test instructions, CLI usage examples, and policies about never using “allow everything.”
+- Add `docs/codex-subagent-workflow.md` describing async subagent lifecycle.
+- Ensure `package-lock.json` committed.
 
-**Step 1:** Document usage scenarios, mention guardrails (never "allow everything").
+**Step 1:** Document standard flows (start/send/pull/show-log/watch), mention `--output-last-message`, `--policy` presets, and `npm run lint/test/format` expectations.
 
-**Step 2:** `git add README.md docs/codex-subagent-workflow.md && git commit -m "docs: outline codex-subagent workflow"`
+**Step 2:** Run `npm run format:fix && npm run lint && npm run typecheck && npm run test`. Update `README` with verification output snippet.
+
+**Step 3:** Commit docs + lockfile. Plan for integration into upstream superpowers repo.
 
 ---
 
 ### Verification & Next Steps
 
-1. Run `pytest -q` (expect all green).
-2. Run `codex-subagent start --role researcher --policy research-readonly --prompt "Look up the latest AI safety report."` (manual) then `pull` to ensure logging works. Capture outputs for later PR.
-3. Tag todo items for polishing (watch mode, multi-agent dashboards) but keep MVP focused.
+1. Run `npm run lint && npm run typecheck && npm run test && npm run build`.
+2. Execute manual smoke: `node dist/codex-subagent.js start ...` followed by `node dist/codex-subagent.js list/pull/show-log` against a test thread; capture outputs for future PR.
+3. Tag future enhancements (multi-thread dashboards, JSON export) but keep MVP lean.
