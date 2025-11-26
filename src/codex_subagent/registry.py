@@ -31,7 +31,7 @@ class Registry:
         thread_id = thread.get("thread_id")
         if not thread_id:
             raise ValueError("Thread must include a thread_id")
-        self._threads[str(thread_id)] = dict(thread)
+        self._threads[str(thread_id)] = copy.deepcopy(thread)
         self._persist()
 
     def _load(self) -> None:

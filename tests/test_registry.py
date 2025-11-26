@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,16 @@ def test_registry_returns_copy_when_mutated(tmp_path):
     listed[0]["role"] = "changed"
     assert reg.get("123")["role"] == "researcher"
     fetched["metadata"]["notes"].append("beta")
+    assert reg.get("123")["metadata"]["notes"] == ["alpha"]
+
+
+def test_registry_upsert_detaches_input(tmp_path):
+    paths = Paths(tmp_path / ".codex-subagent")
+    paths.ensure()
+    reg = Registry(paths.state_file)
+    local_thread = copy.deepcopy(sample_thread)
+    reg.upsert(local_thread)
+    local_thread["metadata"]["notes"].append("gamma")
     assert reg.get("123")["metadata"]["notes"] == ["alpha"]
 
 
