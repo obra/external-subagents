@@ -41,7 +41,11 @@ describe('pull command', () => {
     });
 
     const fixture = await readFixture('exec-resume-new.json');
-    vi.mocked(runExec).mockResolvedValueOnce(fixture);
+    const promptBodies: string[] = [];
+    vi.mocked(runExec).mockImplementationOnce(async (options) => {
+      promptBodies.push(await readFile(options.promptFile, 'utf8'));
+      return fixture;
+    });
 
     const outputLastPath = path.join(root, 'last.txt');
     const { stdout, output } = captureOutput();
@@ -57,6 +61,8 @@ describe('pull command', () => {
     expect(call.outputLastPath).toBe(outputLastPath);
     expect(call.promptFile).toBeTruthy();
     expect(call.sandbox).toBe('workspace-write');
+    expect(promptBodies[0]).toContain('NO_NEW_MESSAGES');
+    expect(promptBodies[0]).toContain('fingerprint msg-old');
 
     const logPath = path.join(codexRoot, 'logs', 'thread-123.ndjson');
     const logRaw = await readFile(logPath, 'utf8');
@@ -82,8 +88,17 @@ describe('pull command', () => {
       last_message_id: 'msg-old',
     });
 
-    const fixture = await readFixture('exec-resume-same.json');
-    vi.mocked(runExec).mockResolvedValueOnce(fixture);
+    vi.mocked(runExec).mockResolvedValueOnce({
+      thread_id: 'thread-123',
+      last_message_id: 'msg-old',
+      messages: [
+        {
+          id: 'msg-old',
+          role: 'assistant',
+          text: 'NO_NEW_MESSAGES',
+        },
+      ],
+    });
 
     const { stdout, output } = captureOutput();
     await pullCommand({

@@ -16,10 +16,16 @@ export interface PullCommandOptions {
   stdout?: Writable;
 }
 
-async function createEmptyPromptFile(): Promise<{ dir: string; file: string }> {
+async function createPullPromptFile(lastMessageId?: string): Promise<{ dir: string; file: string }> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-pull-'));
   const file = path.join(dir, 'prompt.txt');
-  await writeFile(file, '', 'utf8');
+  const text =
+    'System ping from codex-subagent: do not take new actions or run commands. ' +
+    (lastMessageId
+      ? `If you have produced any assistant output after fingerprint ${lastMessageId}, restate the newest assistant message verbatim. `
+      : 'Restate your most recent assistant message verbatim. ') +
+    'If nothing is new, respond exactly with NO_NEW_MESSAGES.';
+  await writeFile(file, text, 'utf8');
   return { dir, file };
 }
 
@@ -44,9 +50,10 @@ export async function pullCommand(options: PullCommandOptions): Promise<void> {
   const registry = new Registry(paths);
   const thread = await registry.get(options.threadId);
   ensureThread(options.threadId, thread);
-  const policyConfig = resolvePolicy(thread!.policy!);
+  const safeThread = thread!;
+  const policyConfig = resolvePolicy(safeThread.policy!);
 
-  const { dir, file } = await createEmptyPromptFile();
+  const { dir, file } = await createPullPromptFile(safeThread.last_message_id);
   try {
     const execResult = await runExec({
       promptFile: file,
@@ -55,19 +62,24 @@ export async function pullCommand(options: PullCommandOptions): Promise<void> {
       ...policyConfig,
     });
 
-    const latestId = execResult.last_message_id;
-    if (!latestId || latestId === thread!.last_message_id) {
+    const messages = execResult.messages ?? [];
+    const filtered =
+      safeThread.last_message_id == null
+        ? messages
+        : messages.filter((message) => message.id !== safeThread.last_message_id);
+    const newMessages = filtered.filter(
+      (message) => message.text?.trim().toUpperCase() !== 'NO_NEW_MESSAGES'
+    );
+
+    if (newMessages.length === 0) {
       stdout.write(`No new messages for thread ${options.threadId}\n`);
       return;
     }
 
-    const appended = await appendMessages(
-      paths.logFile(options.threadId),
-      execResult.messages ?? []
-    );
+    const appended = await appendMessages(paths.logFile(options.threadId), newMessages);
     await registry.updateThread(options.threadId, {
-      status: execResult.status ?? thread!.status,
-      last_message_id: latestId,
+      status: execResult.status ?? safeThread.status,
+      last_message_id: newMessages.at(-1)?.id,
     });
 
     stdout.write(
