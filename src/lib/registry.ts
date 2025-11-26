@@ -19,6 +19,7 @@ export interface ThreadMetadata {
   policy?: string;
   status?: string;
   last_message_id?: string;
+  last_pulled_id?: string;
   updated_at?: string;
 }
 
