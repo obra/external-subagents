@@ -4,3 +4,4 @@ dist/
 .DS_Store
 coverage/
 .npm-debug.log*
+.codex-subagent/
