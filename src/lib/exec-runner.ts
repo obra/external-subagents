@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { execa } from 'execa';
 
 export interface ExecMessage {
@@ -25,7 +26,6 @@ export interface ExecOptions {
 
 function buildArgs(options: ExecOptions): string[] {
   const args = ['exec', '--json', '--skip-git-repo-check'];
-  args.push('--prompt-file', path.resolve(options.promptFile));
   if (options.outputLastPath) {
     args.push('--output-last-message', path.resolve(options.outputLastPath));
   }
@@ -38,15 +38,17 @@ function buildArgs(options: ExecOptions): string[] {
   if (options.extraArgs && options.extraArgs.length > 0) {
     args.push(...options.extraArgs);
   }
+  args.push('-');
   return args;
 }
 
 export async function runExec(options: ExecOptions): Promise<ExecResult> {
   const args = buildArgs(options);
+  const promptBody = await readFile(path.resolve(options.promptFile), 'utf8');
 
   let stdout: string;
   try {
-    ({ stdout } = await execa('codex', args));
+    ({ stdout } = await execa('codex', args, { input: promptBody }));
   } catch (error) {
     const prefix = 'codex exec failed';
     if (error instanceof Error) {
