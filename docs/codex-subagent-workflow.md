@@ -4,6 +4,8 @@ This doc captures the recommended flow for spinning up subagents via `codex-suba
 
 ## 1. Start a Thread
 
+Install (or reinstall) via `npm install --prefix ~/.codex/skills/using-subagents-as-codex --production .`. That command creates a wrapper script named `~/.codex/skills/using-subagents-as-codex/codex-subagent` that dynamically imports the packaged CLI from `node_modules/codex-subagent-cli/dist/bin/codex-subagent.js`, so dependency paths remain stable.
+
 ```
 ~/.codex/skills/using-subagents-as-codex/codex-subagent \
   start --role researcher --policy workspace-write \
