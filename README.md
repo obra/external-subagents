@@ -17,14 +17,30 @@ All commands assume Node 20+ and npm 10+.
 codex-subagent <command> [options]
 ```
 
-Global flags:
+### Installing for `~/.codex/skills`
+
+If you need Codex to call the CLI from a skill folder (e.g., `using-subagents-as-codex`), install this package there with production dependencies only:
+
+```bash
+npm install --prefix ~/.codex/skills/using-subagents-as-codex --production .
+```
+
+Afterwards, invoke the CLI through the binary that `npm` drops inside the skill directory:
+
+```bash
+~/.codex/skills/using-subagents-as-codex/node_modules/.bin/codex-subagent <command>
+```
+
+This absolute path works no matter which repository the parent Codex session is using.
+
+### Global flags
 
 - `--root <path>`: override the default `.codex-subagent` root.
 - `--controller-id <id>`: override the auto-detected controlling Codex session (use this when multiple Codex windows should share the same subagent state).
 
 | Command | Purpose                                                      |
 | ------- | ------------------------------------------------------------ |
-| `start` | Launch a new Codex exec thread with explicit role/policy.    |
+| `start` | Launch a new Codex exec thread with explicit role/policy (use `workspace-write` unless you have a custom Codex profile). |
 | `send`  | Resume an existing thread with a new prompt.                 |
 | `peek`  | Show the newest unseen assistant message (read-only).        |
 | `log`   | View the stored NDJSON history (supports `--tail`, `--raw`). |

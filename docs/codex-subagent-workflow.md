@@ -5,11 +5,13 @@ This doc captures the recommended flow for spinning up subagents via `codex-suba
 ## 1. Start a Thread
 
 ```
-codex-subagent start --role researcher --policy workspace-write --prompt-file task.txt [--output-last last.txt] [--controller-id demo-doc]
+~/.codex/skills/using-subagents-as-codex/node_modules/.bin/codex-subagent \
+  start --role researcher --policy workspace-write \
+  --prompt-file task.txt [--output-last last.txt] [--controller-id demo-doc]
 ```
 
 - Write prompts to files to avoid shell quoting issues.
-- Policies map to safe Codex sandbox/profile combinations; the CLI refuses "allow everything".
+- `workspace-write` is the recommended policy; custom policy names only work if you have matching Codex profiles configured.
 - A new thread entry is persisted under `.codex-subagent/state/threads.json`, with NDJSON logs under `.codex-subagent/logs/<thread>.ndjson`.
 
 ## 2. Resume with Context (Optional)
