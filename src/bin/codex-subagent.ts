@@ -5,6 +5,7 @@ import { startCommand } from '../commands/start.ts';
 import { sendCommand } from '../commands/send.ts';
 import { peekCommand } from '../commands/peek.ts';
 import { logCommand } from '../commands/log.ts';
+import { watchCommand } from '../commands/watch.ts';
 import { RegistryLoadError } from '../lib/registry.ts';
 
 interface ParsedArgs {
@@ -198,6 +199,49 @@ function parseLogFlags(args: string[]): LogFlags {
   return flags;
 }
 
+interface WatchFlags {
+  threadId?: string;
+  intervalMs?: number;
+  outputLastPath?: string;
+}
+
+function parseWatchFlags(args: string[]): WatchFlags {
+  const flags: WatchFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+    switch (arg) {
+      case '--thread':
+        if (!next) {
+          throw new Error('--thread flag requires a value');
+        }
+        flags.threadId = next;
+        i++;
+        break;
+      case '--interval-ms':
+        if (!next) {
+          throw new Error('--interval-ms flag requires a value');
+        }
+        flags.intervalMs = Number(next);
+        if (Number.isNaN(flags.intervalMs) || flags.intervalMs! < 1) {
+          throw new Error('--interval-ms must be a positive integer');
+        }
+        i++;
+        break;
+      case '--output-last':
+        if (!next) {
+          throw new Error('--output-last flag requires a path');
+        }
+        flags.outputLastPath = path.resolve(next);
+        i++;
+        break;
+      default:
+        throw new Error(`Unknown flag for watch command: ${arg}`);
+    }
+  }
+  return flags;
+}
+
 function printHelp(): void {
   const lines = [
     'codex-subagent <command>',
@@ -208,6 +252,7 @@ function printHelp(): void {
     '  send            Send a new prompt to an existing thread (resume)',
     '  peek            Show the newest unseen assistant message for a thread',
     '  log             Print the stored log for a thread (no Codex call)',
+    '  watch           Continuously peek a thread until interrupted',
     '',
     'Options:',
     '  --root <path>   Override the .codex-subagent root directory',
@@ -227,6 +272,10 @@ function printHelp(): void {
     '    --thread <id>         Target thread to inspect (required)',
     '    --tail <n>            Optional number of most recent entries to show',
     '    --raw                 Output raw NDJSON lines',
+    '  watch flags:',
+    '    --thread <id>         Target thread to watch (required)',
+    '    --interval-ms <n>     Interval between peeks (default 5000)',
+    '    --output-last <path>  Optional file for last message text',
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
 }
@@ -298,6 +347,30 @@ async function run(): Promise<void> {
           tail: flags.tail,
           raw: Boolean(flags.raw),
         });
+      } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      break;
+    case 'watch':
+      try {
+        const flags = parseWatchFlags(rest);
+        const controller = new AbortController();
+        const handleSigint = () => {
+          controller.abort();
+        };
+        process.on('SIGINT', handleSigint);
+        try {
+          await watchCommand({
+            rootDir,
+            threadId: flags.threadId ?? '',
+            intervalMs: flags.intervalMs,
+            outputLastPath: flags.outputLastPath,
+            signal: controller.signal,
+          });
+        } finally {
+          process.off('SIGINT', handleSigint);
+        }
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
         process.exitCode = 1;

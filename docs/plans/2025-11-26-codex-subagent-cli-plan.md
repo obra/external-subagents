@@ -282,21 +282,21 @@ We still have the option to add a future `poll` command if Codex ever supports a
 
 ---
 
-### Task 6: `show-log` Command & Watch Mode + Scripts
+### Task 6: Watch Mode + Demo Script
 
-**Status (2025-11-26):** ⏳ Blocked on Tasks 4–5.
+**Status (2025-11-26):** ✅ Completed – `watch` reuses `peek` in a loop with abort-safe intervals, plus `scripts/demo-watch.ts` (`npm run demo`) to exercise start+watch end to end.
 
 **Files:**
 
-- Add `src/commands/show-log.ts`, `src/commands/watch.ts`
-- Tests: `tests/show-log-command.test.ts`
-- Scripts: `scripts/demo-start-and-pull.ts` (tsx runnable)
+- Add `src/commands/watch.ts`
+- Tests: `tests/watch-command.test.ts`
+- Scripts: `scripts/demo-watch.ts`, `scripts/demo-watch-prompt.txt` + `npm run demo`
 
-**Step 1:** Write vitest ensuring `show-log` pretty prints NDJSON entries with timestamps, and `watch` polls `peek`/`send` data on interval (use fake timers/mocks).
+**Step 1:** Write vitest ensuring `watch` polls `peek`-style output on an interval (fake timers/mocks), respects ctrl-c, and supports `--tail`/`--since` options for initial display.
 
-**Step 2:** Implement commands, ensuring watch reuses `peek` logic and respects ctrl-c.
+**Step 2:** Implement the `watch` command, reusing `peek` logic without spamming Codex, and add a demo script that spawns a harmless thread then tails updates via `watch`.
 
-**Step 3:** Add manual demo script calling `npm run demo` (wired in package.json) to spawn a harmless thread and tail output via `watch`. Commit.
+**Step 3:** Wire the demo into package.json (`npm run demo`) and document expected output.
 
 ---
 

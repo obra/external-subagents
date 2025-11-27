@@ -1,0 +1,1 @@
+You are a Codex subagent doing a tiny watch demo. Reply with a short status update and then finish.

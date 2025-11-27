@@ -15,7 +15,8 @@
     "format:fix": "prettier --write .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "prepare": "node scripts/run-prek-install.mjs"
+    "prepare": "node scripts/run-prek-install.mjs",
+    "demo": "tsx scripts/demo-watch.ts"
   },
   "engines": {
     "node": ">=20",
