@@ -13,6 +13,7 @@ export interface StartCommandOptions {
   promptFile: string;
   outputLastPath?: string;
   stdout?: Writable;
+  controllerId: string;
 }
 
 export async function startCommand(options: StartCommandOptions): Promise<string> {
@@ -44,6 +45,7 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     policy: options.policy,
     status: execResult.status ?? 'running',
     last_message_id: execResult.last_message_id,
+    controller_id: options.controllerId,
   });
 
   const logPath = paths.logFile(execResult.thread_id);

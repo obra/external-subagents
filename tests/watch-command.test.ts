@@ -22,6 +22,7 @@ describe('watch command', () => {
       stdout,
       iterations: 2,
       sleep,
+      controllerId: 'controller-one',
     });
 
     expect(vi.mocked(peekCommand)).toHaveBeenCalledTimes(2);
@@ -48,6 +49,7 @@ describe('watch command', () => {
       stdout,
       signal: controller.signal,
       sleep,
+      controllerId: 'controller-one',
     });
 
     await firstCall;

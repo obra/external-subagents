@@ -7,16 +7,19 @@ import { peekCommand } from '../commands/peek.ts';
 import { logCommand } from '../commands/log.ts';
 import { watchCommand } from '../commands/watch.ts';
 import { RegistryLoadError } from '../lib/registry.ts';
+import { getControllerId } from '../lib/controller-id.ts';
 
 interface ParsedArgs {
   command: string;
   rootDir?: string;
+  controllerId?: string;
   rest: string[];
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
   let command: string | undefined;
   let rootDir: string | undefined;
+  let controllerId: string | undefined;
   const rest: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
@@ -30,6 +33,15 @@ function parseArgs(argv: string[]): ParsedArgs {
       i++; // skip path value
       continue;
     }
+    if (arg === '--controller-id') {
+      const next = argv[i + 1];
+      if (!next) {
+        throw new Error('--controller-id flag requires a value');
+      }
+      controllerId = next;
+      i++;
+      continue;
+    }
     if (!command) {
       command = arg;
       continue;
@@ -37,7 +49,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     rest.push(arg);
   }
 
-  return { command: command ?? 'list', rootDir, rest };
+  return { command: command ?? 'list', rootDir, controllerId, rest };
 }
 
 interface StartFlags {
@@ -255,7 +267,8 @@ function printHelp(): void {
     '  watch           Continuously peek a thread until interrupted',
     '',
     'Options:',
-    '  --root <path>   Override the .codex-subagent root directory',
+    '  --root <path>          Override the .codex-subagent root directory',
+    '  --controller-id <id>   Override auto-detected controller session ID',
     '  start flags:',
     '    --role <name>         Required Codex role (e.g., researcher)',
     '    --policy <policy>     Required policy (never "allow everything")',
@@ -281,12 +294,18 @@ function printHelp(): void {
 }
 
 async function run(): Promise<void> {
-  const { command, rootDir, rest } = parseArgs(process.argv.slice(2));
+  const {
+    command,
+    rootDir,
+    controllerId: overrideControllerId,
+    rest,
+  } = parseArgs(process.argv.slice(2));
+  const controllerId = getControllerId({ override: overrideControllerId });
 
   switch (command) {
     case 'list':
       try {
-        await listCommand({ rootDir });
+        await listCommand({ rootDir, controllerId });
       } catch (error) {
         if (error instanceof RegistryLoadError) {
           process.stderr.write(`${error.message}\n`);
@@ -305,6 +324,7 @@ async function run(): Promise<void> {
           policy: flags.policy ?? '',
           promptFile: flags.promptFile ?? '',
           outputLastPath: flags.outputLastPath,
+          controllerId,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -319,6 +339,7 @@ async function run(): Promise<void> {
           threadId: flags.threadId ?? '',
           promptFile: flags.promptFile ?? '',
           outputLastPath: flags.outputLastPath,
+          controllerId,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -332,6 +353,7 @@ async function run(): Promise<void> {
           rootDir,
           threadId: flags.threadId ?? '',
           outputLastPath: flags.outputLastPath,
+          controllerId,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -346,6 +368,7 @@ async function run(): Promise<void> {
           threadId: flags.threadId ?? '',
           tail: flags.tail,
           raw: Boolean(flags.raw),
+          controllerId,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -367,6 +390,7 @@ async function run(): Promise<void> {
             intervalMs: flags.intervalMs,
             outputLastPath: flags.outputLastPath,
             signal: controller.signal,
+            controllerId,
           });
         } finally {
           process.off('SIGINT', handleSigint);

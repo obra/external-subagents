@@ -6,6 +6,7 @@ import { Registry } from '../lib/registry.ts';
 import { appendMessages } from '../lib/logs.ts';
 import { runExec } from '../lib/exec-runner.ts';
 import { resolvePolicy } from '../lib/policy.ts';
+import { assertThreadOwnership } from '../lib/thread-ownership.ts';
 
 export interface SendCommandOptions {
   rootDir?: string;
@@ -13,6 +14,7 @@ export interface SendCommandOptions {
   promptFile: string;
   outputLastPath?: string;
   stdout?: Writable;
+  controllerId: string;
 }
 
 function ensureThreadMetadata(
@@ -43,9 +45,13 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
   await paths.ensure();
 
   const registry = new Registry(paths);
-  const thread = await registry.get(options.threadId);
-  ensureThreadMetadata(options.threadId, thread);
-  const policyConfig = resolvePolicy(thread!.policy!);
+  const ownedThread = await assertThreadOwnership(
+    await registry.get(options.threadId),
+    options.controllerId,
+    registry
+  );
+  ensureThreadMetadata(options.threadId, ownedThread);
+  const policyConfig = resolvePolicy(ownedThread.policy!);
 
   const execResult = await runExec({
     promptFile: path.resolve(options.promptFile),
@@ -58,8 +64,8 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
   await appendMessages(logPath, execResult.messages ?? []);
 
   await registry.updateThread(options.threadId, {
-    status: execResult.status ?? thread!.status,
-    last_message_id: execResult.last_message_id ?? thread!.last_message_id,
+    status: execResult.status ?? ownedThread.status,
+    last_message_id: execResult.last_message_id ?? ownedThread.last_message_id,
   });
 
   stdout.write(`Sent prompt to thread ${options.threadId}\n`);

@@ -5,7 +5,7 @@ This doc captures the recommended flow for spinning up subagents via `codex-suba
 ## 1. Start a Thread
 
 ```
-codex-subagent start --role researcher --policy workspace-write --prompt-file task.txt [--output-last last.txt]
+codex-subagent start --role researcher --policy workspace-write --prompt-file task.txt [--output-last last.txt] [--controller-id demo-doc]
 ```
 
 - Write prompts to files to avoid shell quoting issues.
@@ -44,14 +44,14 @@ codex-subagent log --thread <thread_id> [--tail 20] [--raw]
 For “is anything happening?” loops, `watch` reuses `peek` on an interval without hitting Codex unless a new turn exists:
 
 ```
-codex-subagent watch --thread <thread_id> [--interval-ms 2000] [--output-last last.txt]
+codex-subagent watch --thread <thread_id> [--interval-ms 2000] [--output-last last.txt] [--controller-id demo-doc]
 ```
 
 Ctrl+C stops the loop. `npm run demo` shows a complete start → watch flow end-to-end.
 
 ## 5. Cleanup / Archival
 
-Registry + log files live under `.codex-subagent`. Commit them only if you intentionally share sample data; otherwise, add the directory to `.gitignore` (already configured in this repo).
+Registry + log files live under `.codex-subagent`. Commit them only if you intentionally share sample data; otherwise, add the directory to `.gitignore` (already configured in this repo). Each thread is tagged with the controller session ID (auto-detected from the parent `codex` process or supplied via `--controller-id`), and commands refuse to touch threads owned by another session.
 
 ## Verification Routine
 

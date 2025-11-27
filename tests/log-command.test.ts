@@ -18,6 +18,7 @@ describe('log command', () => {
       thread_id: 'thread-123',
       role: 'researcher',
       policy: 'workspace-write',
+      controller_id: 'controller-one',
     });
     return { root, codexRoot, paths };
   }
@@ -35,7 +36,12 @@ describe('log command', () => {
     );
 
     const { stdout, output } = captureOutput();
-    await logCommand({ rootDir: codexRoot, threadId: 'thread-123', stdout });
+    await logCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      stdout,
+      controllerId: 'controller-one',
+    });
 
     const text = output.join('');
     expect(text).toContain('Log entries for thread thread-123 (2)');
@@ -57,7 +63,14 @@ describe('log command', () => {
     );
 
     const { stdout, output } = captureOutput();
-    await logCommand({ rootDir: codexRoot, threadId: 'thread-123', tail: 2, raw: true, stdout });
+    await logCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      tail: 2,
+      raw: true,
+      stdout,
+      controllerId: 'controller-one',
+    });
 
     const lines = output.join('').trim().split('\n');
     expect(lines).toHaveLength(2);

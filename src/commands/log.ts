@@ -4,6 +4,7 @@ import { constants as fsConstants } from 'node:fs';
 import { Writable } from 'node:stream';
 import { Paths } from '../lib/paths.ts';
 import { Registry } from '../lib/registry.ts';
+import { assertThreadOwnership } from '../lib/thread-ownership.ts';
 
 export interface LogCommandOptions {
   rootDir?: string;
@@ -11,6 +12,7 @@ export interface LogCommandOptions {
   tail?: number;
   raw?: boolean;
   stdout?: Writable;
+  controllerId: string;
 }
 
 export async function logCommand(options: LogCommandOptions): Promise<void> {
@@ -23,10 +25,7 @@ export async function logCommand(options: LogCommandOptions): Promise<void> {
   await paths.ensure();
 
   const registry = new Registry(paths);
-  const thread = await registry.get(options.threadId);
-  if (!thread) {
-    throw new Error(`Thread ${options.threadId} not found`);
-  }
+  await assertThreadOwnership(await registry.get(options.threadId), options.controllerId, registry);
 
   const logPath = paths.logFile(options.threadId);
   try {

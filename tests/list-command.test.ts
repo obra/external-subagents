@@ -12,6 +12,7 @@ const sampleThread = {
   policy: 'research-readonly',
   status: 'running',
   updated_at: '2025-11-26T12:00:00Z',
+  controller_id: 'controller-one',
 };
 
 async function createStateFixture(): Promise<string> {
@@ -45,6 +46,7 @@ describe('list command', () => {
     await listCommand({
       rootDir: path.join(root, '.codex-subagent'),
       stdout,
+      controllerId: 'controller-one',
     });
 
     const text = output.join('');
@@ -60,6 +62,7 @@ describe('list command', () => {
     await listCommand({
       rootDir: path.join(tmp, '.codex-subagent'),
       stdout,
+      controllerId: 'controller-one',
     });
 
     expect(output.join('')).toContain('No threads found');
@@ -70,7 +73,37 @@ describe('list command', () => {
     const registryPath = path.join(root, '.codex-subagent', 'state', 'threads.json');
     await writeFile(registryPath, '{not-json', 'utf8');
     await expect(
-      listCommand({ rootDir: path.join(root, '.codex-subagent') })
+      listCommand({
+        rootDir: path.join(root, '.codex-subagent'),
+        controllerId: 'controller-one',
+      })
     ).rejects.toBeInstanceOf(RegistryLoadError);
+  });
+
+  it('skips threads belonging to other controllers', async () => {
+    const root = await createStateFixture();
+    const stateDir = path.join(root, '.codex-subagent', 'state');
+    const threadsFile = path.join(stateDir, 'threads.json');
+    const data = {
+      [sampleThread.thread_id]: sampleThread,
+      'T-OTHER': {
+        ...sampleThread,
+        thread_id: 'T-OTHER',
+        controller_id: 'different-controller',
+      },
+    };
+    await writeFile(threadsFile, JSON.stringify(data, null, 2));
+
+    const { stdout, output } = captureOutput();
+    await listCommand({
+      rootDir: path.join(root, '.codex-subagent'),
+      stdout,
+      controllerId: 'controller-one',
+    });
+
+    const text = output.join('');
+    expect(text).toContain('Found 1 thread');
+    expect(text).toContain('T-123');
+    expect(text).not.toContain('T-OTHER');
   });
 });

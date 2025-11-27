@@ -21,6 +21,7 @@ export interface ThreadMetadata {
   last_message_id?: string;
   last_pulled_id?: string;
   updated_at?: string;
+  controller_id?: string;
 }
 
 type ThreadMap = Record<string, ThreadMetadata>;
@@ -57,6 +58,9 @@ export class Registry {
       thread_id: threadId,
       updated_at: thread.updated_at ?? new Date().toISOString(),
     };
+    if (!entry.controller_id && thread.controller_id) {
+      entry.controller_id = thread.controller_id;
+    }
     data[threadId] = entry;
     await this.writeAll(data);
     return entry;

@@ -19,6 +19,7 @@ async function setupThread() {
     policy: 'workspace-write',
     status: 'running',
     last_message_id: 'msg-new',
+    controller_id: 'controller-one',
   });
   return { root, codexRoot, paths, registry };
 }
@@ -40,6 +41,7 @@ describe('peek command', () => {
       threadId: 'thread-123',
       outputLastPath: outputLast,
       stdout,
+      controllerId: 'controller-one',
     });
 
     expect(output.join('')).toContain('Latest message for thread thread-123');
@@ -64,14 +66,24 @@ describe('peek command', () => {
     );
 
     const { stdout, output } = captureOutput();
-    await peekCommand({ rootDir: codexRoot, threadId: 'thread-123', stdout });
+    await peekCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      stdout,
+      controllerId: 'controller-one',
+    });
     expect(output.join('')).toContain('No updates for thread thread-123');
   });
 
   it('informs the user when no log exists yet', async () => {
     const { codexRoot } = await setupThread();
     const { stdout, output } = captureOutput();
-    await peekCommand({ rootDir: codexRoot, threadId: 'thread-123', stdout });
+    await peekCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      stdout,
+      controllerId: 'controller-one',
+    });
     expect(output.join('')).toContain('No log entries found');
   });
 });

@@ -17,6 +17,11 @@ All commands assume Node 20+ and npm 10+.
 codex-subagent <command> [options]
 ```
 
+Global flags:
+
+- `--root <path>`: override the default `.codex-subagent` root.
+- `--controller-id <id>`: override the auto-detected controlling Codex session (use this when multiple Codex windows should share the same subagent state).
+
 | Command | Purpose                                                      |
 | ------- | ------------------------------------------------------------ |
 | `start` | Launch a new Codex exec thread with explicit role/policy.    |
@@ -24,12 +29,11 @@ codex-subagent <command> [options]
 | `peek`  | Show the newest unseen assistant message (read-only).        |
 | `log`   | View the stored NDJSON history (supports `--tail`, `--raw`). |
 | `watch` | Continuously peek a thread at an interval until interrupted. |
-| `list`  | List every thread known to the registry.                     |
+| `list`  | List every thread owned by the current controller.           |
 
-Common flags:
+Per-command notes:
 
-- `--root <path>`: override the default `.codex-subagent` root.
-- `start` requires `--role`, `--policy`, and `--prompt-file` (use files to avoid shell quoting issues). Policies are mapped to safe `--sandbox` / `--profile` combinations automatically.
+- `start` requires `--role`, `--policy`, and `--prompt-file` (write prompts to files to avoid shell quoting issues). Policies are mapped to safe `--sandbox` / `--profile` combinations automatically.
 - `send` needs `--thread` + `--prompt-file`.
 - `peek`, `log`, `watch` all require `--thread` and never call Codex (they read the local log/registry).
 
@@ -49,4 +53,4 @@ Common flags:
 
 ## Policies & Safety
 
-Subagents must never run in "allow everything" mode. The CLI enforces this by refusing dangerous policies and mapping safe ones to explicit `--sandbox`/`--profile` parameters when invoking `codex exec`.
+Subagents must never run in "allow everything" mode. The CLI enforces this by refusing dangerous policies and mapping safe ones to explicit `--sandbox`/`--profile` parameters when invoking `codex exec`. Every thread is also tagged with the controller session ID (auto-detected from the parent Codex process or supplied via `--controller-id`), and commands refuse to act on threads owned by some other controller.

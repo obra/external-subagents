@@ -16,6 +16,7 @@
 - TypeScript toolchain (Node 20+, npm, tsup bundle, Vitest, ESLint flat config, Prettier, `prek`) is wired with passing `npm run format:fix && npm run lint && npm run typecheck && npm run test`.
 - CLI entry (`codex-subagent`) currently exposes only the `list` command; it lists threads without mutating state and surfaces registry errors to stderr.
 - CLI entry (`codex-subagent`) now includes `start`, `send`, `peek`, and `log`; stateful commands validate metadata, stream logs as NDJSON, and forbid "allow everything" policies.
+- CLI entry (`codex-subagent`) now includes `start`, `send`, `peek`, `log`, and `watch`; stateful commands validate metadata, stream logs as NDJSON, tag threads with a controller ID, and forbid "allow everything" policies.
 - Registry/paths helpers never create directories on read, use atomic writes, and protect against malformed JSON (raising `RegistryLoadError`).
 - Manual dry runs of `codex exec` informed the need for prompt files, bootstrap hints, and immediate thread ID tracking; these requirements feed directly into Task 4.
 

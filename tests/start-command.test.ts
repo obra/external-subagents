@@ -46,6 +46,7 @@ describe('start command', () => {
       promptFile,
       outputLastPath,
       stdout,
+      controllerId: 'controller-test',
     });
 
     expect(runExec).toHaveBeenCalledWith({
@@ -60,6 +61,7 @@ describe('start command', () => {
     expect(registry[fixture.thread_id].policy).toBe('research-readonly');
     expect(registry[fixture.thread_id].last_message_id).toBe('msg-last');
     expect(registry[fixture.thread_id].role).toBe('researcher');
+    expect(registry[fixture.thread_id].controller_id).toBe('controller-test');
 
     const logPath = path.join(codexRoot, 'logs', `${fixture.thread_id}.ndjson`);
     const logRaw = await readFile(logPath, 'utf8');
@@ -85,6 +87,7 @@ describe('start command', () => {
         role: 'researcher',
         policy: 'research-readonly',
         promptFile,
+        controllerId: 'controller-test',
       })
     ).rejects.toThrow('exec failed');
 

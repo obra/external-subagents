@@ -12,6 +12,7 @@ export interface WatchCommandOptions {
   signal?: AbortSignal;
   iterations?: number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<boolean>;
+  controllerId: string;
 }
 
 const DEFAULT_INTERVAL_MS = 5000;
@@ -57,6 +58,7 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
       rootDir: options.rootDir,
       threadId: options.threadId,
       outputLastPath: options.outputLastPath,
+      controllerId: options.controllerId,
       stdout,
     });
 

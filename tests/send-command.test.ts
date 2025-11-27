@@ -43,6 +43,7 @@ describe('send command', () => {
       policy: 'workspace-write',
       status: 'running',
       last_message_id: 'msg-old',
+      controller_id: 'controller-one',
     });
 
     const promptFile = path.join(root, 'prompt.txt');
@@ -59,6 +60,7 @@ describe('send command', () => {
       promptFile,
       outputLastPath,
       stdout,
+      controllerId: 'controller-one',
     });
 
     expect(runExec).toHaveBeenCalledWith({
@@ -92,7 +94,33 @@ describe('send command', () => {
         rootDir: codexRoot,
         threadId: 'nope',
         promptFile,
+        controllerId: 'controller-one',
       })
-    ).rejects.toThrow('Thread nope not found');
+    ).rejects.toThrow('Thread not found');
+  });
+
+  it('errors when accessing a thread owned by another controller', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-send-other-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+    const paths = new Paths(codexRoot);
+    await paths.ensure();
+    const registry = new Registry(paths);
+    await registry.upsert({
+      thread_id: 'thread-123',
+      role: 'researcher',
+      policy: 'workspace-write',
+      controller_id: 'other-controller',
+    });
+    const promptFile = path.join(root, 'prompt.txt');
+    await writeFile(promptFile, 'Ping');
+
+    await expect(
+      sendCommand({
+        rootDir: codexRoot,
+        threadId: 'thread-123',
+        promptFile,
+        controllerId: 'controller-one',
+      })
+    ).rejects.toThrow('Thread thread-123 belongs to a different controller');
   });
 });
