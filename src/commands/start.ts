@@ -1,10 +1,9 @@
 import process from 'node:process';
 import { Writable } from 'node:stream';
-import { Paths } from '../lib/paths.ts';
-import { Registry } from '../lib/registry.ts';
-import { runExec } from '../lib/exec-runner.ts';
-import { appendMessages } from '../lib/logs.ts';
-import { resolvePolicy } from '../lib/policy.ts';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { runStartThreadWorkflow } from '../lib/start-thread.ts';
 
 export interface StartCommandOptions {
   rootDir?: string;
@@ -14,9 +13,15 @@ export interface StartCommandOptions {
   outputLastPath?: string;
   stdout?: Writable;
   controllerId: string;
+  wait?: boolean;
 }
 
-export async function startCommand(options: StartCommandOptions): Promise<string> {
+const WORKER_SCRIPT = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../start-runner.js'
+);
+
+export async function startCommand(options: StartCommandOptions): Promise<string | undefined> {
   if (!options.role) {
     throw new Error('start command requires --role');
   }
@@ -28,29 +33,34 @@ export async function startCommand(options: StartCommandOptions): Promise<string
   }
 
   const stdout = options.stdout ?? process.stdout;
-  const paths = new Paths(options.rootDir);
-  await paths.ensure();
 
-  const policyConfig = resolvePolicy(options.policy);
-  const execResult = await runExec({
-    promptFile: options.promptFile,
-    outputLastPath: options.outputLastPath,
-    ...policyConfig,
-  });
+  if (options.wait) {
+    const result = await runStartThreadWorkflow(options);
+    stdout.write(`Started thread ${result.threadId}\n`);
+    return result.threadId;
+  }
 
-  const registry = new Registry(paths);
-  await registry.upsert({
-    thread_id: execResult.thread_id,
+  launchDetachedWorker(options);
+  stdout.write(
+    'Subagent launched in the background; Codex may run for minutes or hours. Use `codex-subagent list`, `peek`, or `log` later to inspect results.\n'
+  );
+  return undefined;
+}
+
+function launchDetachedWorker(options: StartCommandOptions): void {
+  const payloadData = {
+    rootDir: options.rootDir ? path.resolve(options.rootDir) : undefined,
     role: options.role,
     policy: options.policy,
-    status: execResult.status ?? 'running',
-    last_message_id: execResult.last_message_id,
-    controller_id: options.controllerId,
+    promptFile: path.resolve(options.promptFile),
+    outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
+    controllerId: options.controllerId,
+  };
+
+  const payload = Buffer.from(JSON.stringify(payloadData), 'utf8').toString('base64');
+  const child = spawn(process.execPath, [WORKER_SCRIPT, '--payload', payload], {
+    detached: true,
+    stdio: 'ignore',
   });
-
-  const logPath = paths.logFile(execResult.thread_id);
-  await appendMessages(logPath, execResult.messages ?? []);
-
-  stdout.write(`Started thread ${execResult.thread_id}\n`);
-  return execResult.thread_id;
+  child.unref();
 }

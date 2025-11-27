@@ -19,7 +19,7 @@ Use this skill any time the main Codex session might benefit from parallel or lo
 
 ## Workflow (Do This Every Time)
 1. **Prep prompt**: Write the request to a prompt file (`task.txt`, `followup.txt`). Never inline multi-line prompts; this avoids shell quoting issues and leaves an audit trail.
-2. **Launch**: `~/.codex/skills/using-subagents-as-codex/node_modules/.bin/codex-subagent start --role <role> --policy workspace-write --prompt-file task.txt [--output-last last.txt] [--controller-id my-session]`. `workspace-write` (or `read-only`) maps directly to Codex sandboxes; custom names only work if you’ve defined matching Codex profiles.
+2. **Launch**: `~/.codex/skills/using-subagents-as-codex/node_modules/.bin/codex-subagent start --role <role> --policy workspace-write --prompt-file task.txt [--output-last last.txt] [--controller-id my-session] [--wait]`. Detached mode is the default—Codex keeps running for minutes/hours while the CLI returns immediately. Add `--wait` only when you need to sit in the session until Codex finishes.
 3. **Inspect**: Use `peek --thread <id> [--output-last last.txt]` to fetch the newest unseen assistant message without resuming; it updates `last_pulled_id` so repeated peeks are quiet when nothing changed.
 4. **Resume**: When you have follow-up instructions, `send --thread <id> --prompt-file followup.txt [...]`. Policy/role come from the registry; you only supply the new prompt file.
 5. **Review history**: `log --thread <id> [--tail 20] [--raw]` prints NDJSON history; grep/pipe as needed.

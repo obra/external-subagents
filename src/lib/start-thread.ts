@@ -1,0 +1,48 @@
+import path from 'node:path';
+import { Paths } from './paths.ts';
+import { resolvePolicy } from './policy.ts';
+import { runExec } from './exec-runner.ts';
+import { Registry } from './registry.ts';
+import { appendMessages } from './logs.ts';
+
+export interface StartThreadWorkflowOptions {
+  rootDir?: string;
+  role: string;
+  policy: string;
+  promptFile: string;
+  outputLastPath?: string;
+  controllerId: string;
+}
+
+export interface StartThreadWorkflowResult {
+  threadId: string;
+}
+
+export async function runStartThreadWorkflow(
+  options: StartThreadWorkflowOptions
+): Promise<StartThreadWorkflowResult> {
+  const paths = new Paths(options.rootDir);
+  await paths.ensure();
+
+  const policyConfig = resolvePolicy(options.policy);
+  const execResult = await runExec({
+    promptFile: path.resolve(options.promptFile),
+    outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
+    ...policyConfig,
+  });
+
+  const registry = new Registry(paths);
+  await registry.upsert({
+    thread_id: execResult.thread_id,
+    role: options.role,
+    policy: options.policy,
+    status: execResult.status ?? 'running',
+    last_message_id: execResult.last_message_id,
+    controller_id: options.controllerId,
+  });
+
+  const logPath = paths.logFile(execResult.thread_id);
+  await appendMessages(logPath, execResult.messages ?? []);
+
+  return { threadId: execResult.thread_id };
+}

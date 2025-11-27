@@ -47,10 +47,11 @@ describe('start command', () => {
       outputLastPath,
       stdout,
       controllerId: 'controller-test',
+      wait: true,
     });
 
     expect(runExec).toHaveBeenCalledWith({
-      promptFile,
+      promptFile: path.resolve(promptFile),
       profile: 'research-readonly',
       outputLastPath,
     });
@@ -88,6 +89,7 @@ describe('start command', () => {
         policy: 'research-readonly',
         promptFile,
         controllerId: 'controller-test',
+        wait: true,
       })
     ).rejects.toThrow('exec failed');
 

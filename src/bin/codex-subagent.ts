@@ -57,6 +57,7 @@ interface StartFlags {
   policy?: string;
   promptFile?: string;
   outputLastPath?: string;
+  wait?: boolean;
 }
 
 function parseStartFlags(args: string[]): StartFlags {
@@ -92,6 +93,9 @@ function parseStartFlags(args: string[]): StartFlags {
         }
         flags.outputLastPath = path.resolve(next);
         i++;
+        break;
+      case '--wait':
+        flags.wait = true;
         break;
       default:
         throw new Error(`Unknown flag for start command: ${arg}`);
@@ -274,6 +278,7 @@ function printHelp(): void {
     '    --policy <policy>     Required policy (never "allow everything")',
     '    --prompt-file <path>  Prompt contents for the subagent',
     '    --output-last <path>  Optional file for last message text',
+    '    --wait                Block until Codex finishes (default: detach)',
     '  send flags:',
     '    --thread <id>         Target thread to resume (required)',
     '    --prompt-file <path>  Prompt file for the next turn',
@@ -324,6 +329,7 @@ async function run(): Promise<void> {
           policy: flags.policy ?? '',
           promptFile: flags.promptFile ?? '',
           outputLastPath: flags.outputLastPath,
+          wait: Boolean(flags.wait),
           controllerId,
         });
       } catch (error) {

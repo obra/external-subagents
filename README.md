@@ -40,7 +40,7 @@ This absolute path works no matter which repository the parent Codex session is 
 
 | Command | Purpose                                                      |
 | ------- | ------------------------------------------------------------ |
-| `start` | Launch a new Codex exec thread with explicit role/policy (use `workspace-write` unless you have a custom Codex profile). |
+| `start` | Launch a new Codex exec thread with explicit role/policy (defaults to **detached**, so it returns immediately; add `--wait` to block). |
 | `send`  | Resume an existing thread with a new prompt.                 |
 | `peek`  | Show the newest unseen assistant message (read-only).        |
 | `log`   | View the stored NDJSON history (supports `--tail`, `--raw`). |
@@ -50,6 +50,7 @@ This absolute path works no matter which repository the parent Codex session is 
 Per-command notes:
 
 - `start` requires `--role`, `--policy`, and `--prompt-file` (write prompts to files to avoid shell quoting issues). Policies are mapped to safe `--sandbox` / `--profile` combinations automatically.
+- `start` warns that long-running Codex sessions may take minutes or hours. Use the default detached mode when you just want the work to continue in the background, and `--wait` when you truly need to stream the run inline.
 - `send` needs `--thread` + `--prompt-file`.
 - `peek`, `log`, `watch` all require `--thread` and never call Codex (they read the local log/registry).
 

@@ -7,11 +7,12 @@ This doc captures the recommended flow for spinning up subagents via `codex-suba
 ```
 ~/.codex/skills/using-subagents-as-codex/node_modules/.bin/codex-subagent \
   start --role researcher --policy workspace-write \
-  --prompt-file task.txt [--output-last last.txt] [--controller-id demo-doc]
+  --prompt-file task.txt [--output-last last.txt] [--controller-id demo-doc] [--wait]
 ```
 
 - Write prompts to files to avoid shell quoting issues.
 - `workspace-write` is the recommended policy; custom policy names only work if you have matching Codex profiles configured.
+- **Detached by default:** without `--wait`, `start` spawns a background Codex process and returns immediately. Long-running tasks may take minutes or hours; use `peek`/`log` later to inspect results, or add `--wait` when you need to stream the entire run inline.
 - A new thread entry is persisted under `.codex-subagent/state/threads.json`, with NDJSON logs under `.codex-subagent/logs/<thread>.ndjson`.
 
 ## 2. Resume with Context (Optional)
