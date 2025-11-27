@@ -28,7 +28,7 @@ npm install --prefix ~/.codex/skills/using-subagents-as-codex --production .
 Afterwards, invoke the CLI through the binary that `npm` drops inside the skill directory:
 
 ```bash
-~/.codex/skills/using-subagents-as-codex/node_modules/.bin/codex-subagent <command>
+~/.codex/skills/using-subagents-as-codex/codex-subagent <command>
 ```
 
 This absolute path works no matter which repository the parent Codex session is using.

@@ -5,7 +5,7 @@ This doc captures the recommended flow for spinning up subagents via `codex-suba
 ## 1. Start a Thread
 
 ```
-~/.codex/skills/using-subagents-as-codex/node_modules/.bin/codex-subagent \
+~/.codex/skills/using-subagents-as-codex/codex-subagent \
   start --role researcher --policy workspace-write \
   --prompt-file task.txt [--output-last last.txt] [--controller-id demo-doc] [--wait]
 ```

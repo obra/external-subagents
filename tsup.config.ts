@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: ['src/bin/codex-subagent.ts', 'src/workers/start-runner.ts'],
-  format: ['esm', 'cjs'],
+  format: ['esm'],
   sourcemap: true,
   clean: true,
   target: 'node20',
