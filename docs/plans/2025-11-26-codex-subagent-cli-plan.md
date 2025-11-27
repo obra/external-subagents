@@ -302,7 +302,7 @@ We still have the option to add a future `poll` command if Codex ever supports a
 
 ### Task 7: Documentation, npm Scripts, and Verification
 
-**Status (2025-11-26):** ⏳ Pending final CLI feature set.
+**Status (2025-11-26):** ⏳ In progress – README + workflow doc drafted; final manual smoke + polish pending.
 
 **Files:**
 
