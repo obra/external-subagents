@@ -3,7 +3,8 @@ import path from 'node:path';
 import { listCommand } from '../commands/list.ts';
 import { startCommand } from '../commands/start.ts';
 import { sendCommand } from '../commands/send.ts';
-import { pullCommand } from '../commands/pull.ts';
+import { peekCommand } from '../commands/peek.ts';
+import { logCommand } from '../commands/log.ts';
 import { RegistryLoadError } from '../lib/registry.ts';
 
 interface ParsedArgs {
@@ -126,13 +127,13 @@ function parseSendFlags(args: string[]): SendFlags {
   return flags;
 }
 
-interface PullFlags {
+interface PeekFlags {
   threadId?: string;
   outputLastPath?: string;
 }
 
-function parsePullFlags(args: string[]): PullFlags {
-  const flags: PullFlags = {};
+function parsePeekFlags(args: string[]): PeekFlags {
+  const flags: PeekFlags = {};
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
@@ -152,7 +153,46 @@ function parsePullFlags(args: string[]): PullFlags {
         i++;
         break;
       default:
-        throw new Error(`Unknown flag for pull command: ${arg}`);
+        throw new Error(`Unknown flag for peek command: ${arg}`);
+    }
+  }
+  return flags;
+}
+
+interface LogFlags {
+  threadId?: string;
+  tail?: number;
+  raw?: boolean;
+}
+
+function parseLogFlags(args: string[]): LogFlags {
+  const flags: LogFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+    switch (arg) {
+      case '--thread':
+        if (!next) {
+          throw new Error('--thread flag requires a value');
+        }
+        flags.threadId = next;
+        i++;
+        break;
+      case '--tail':
+        if (!next) {
+          throw new Error('--tail flag requires a value');
+        }
+        flags.tail = Number(next);
+        if (Number.isNaN(flags.tail) || flags.tail! < 1) {
+          throw new Error('--tail must be a positive integer');
+        }
+        i++;
+        break;
+      case '--raw':
+        flags.raw = true;
+        break;
+      default:
+        throw new Error(`Unknown flag for log command: ${arg}`);
     }
   }
   return flags;
@@ -166,7 +206,8 @@ function printHelp(): void {
     '  list            List stored threads (default)',
     '  start           Launch a new Codex exec thread',
     '  send            Send a new prompt to an existing thread (resume)',
-    '  pull            Check an existing thread for new assistant messages',
+    '  peek            Show the newest unseen assistant message for a thread',
+    '  log             Print the stored log for a thread (no Codex call)',
     '',
     'Options:',
     '  --root <path>   Override the .codex-subagent root directory',
@@ -179,9 +220,13 @@ function printHelp(): void {
     '    --thread <id>         Target thread to resume (required)',
     '    --prompt-file <path>  Prompt file for the next turn',
     '    --output-last <path>  Optional file for last message text',
-    '  pull flags:',
-    '    --thread <id>         Target thread to resume (required)',
+    '  peek flags:',
+    '    --thread <id>         Target thread to inspect (required)',
     '    --output-last <path>  Optional file for last message text',
+    '  log flags:',
+    '    --thread <id>         Target thread to inspect (required)',
+    '    --tail <n>            Optional number of most recent entries to show',
+    '    --raw                 Output raw NDJSON lines',
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
 }
@@ -231,13 +276,27 @@ async function run(): Promise<void> {
         process.exitCode = 1;
       }
       break;
-    case 'pull':
+    case 'peek':
       try {
-        const flags = parsePullFlags(rest);
-        await pullCommand({
+        const flags = parsePeekFlags(rest);
+        await peekCommand({
           rootDir,
           threadId: flags.threadId ?? '',
           outputLastPath: flags.outputLastPath,
+        });
+      } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      break;
+    case 'log':
+      try {
+        const flags = parseLogFlags(rest);
+        await logCommand({
+          rootDir,
+          threadId: flags.threadId ?? '',
+          tail: flags.tail,
+          raw: Boolean(flags.raw),
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

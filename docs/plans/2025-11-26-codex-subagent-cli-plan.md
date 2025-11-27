@@ -15,7 +15,7 @@
 - Python scaffolding (`Paths`, `Registry`, pytest coverage) is merged and green under `pytest -q`.
 - TypeScript toolchain (Node 20+, npm, tsup bundle, Vitest, ESLint flat config, Prettier, `prek`) is wired with passing `npm run format:fix && npm run lint && npm run typecheck && npm run test`.
 - CLI entry (`codex-subagent`) currently exposes only the `list` command; it lists threads without mutating state and surfaces registry errors to stderr.
-- CLI entry (`codex-subagent`) now includes `start`, `send`, and `pull`; stateful commands validate metadata, stream logs as NDJSON, and forbid "allow everything" policies.
+- CLI entry (`codex-subagent`) now includes `start`, `send`, `peek`, and `log`; stateful commands validate metadata, stream logs as NDJSON, and forbid "allow everything" policies.
 - Registry/paths helpers never create directories on read, use atomic writes, and protect against malformed JSON (raising `RegistryLoadError`).
 - Manual dry runs of `codex exec` informed the need for prompt files, bootstrap hints, and immediate thread ID tracking; these requirements feed directly into Task 4.
 
@@ -258,20 +258,25 @@ npm run test
 
 ---
 
-### Task 5: `send` & `pull` Commands with Logging
+### Task 5: `send`, `peek`, and `log` Commands with Logging
 
-**Status (2025-11-26):** ✅ Completed – resume commands now share the exec runner, append NDJSON logs, and keep `last_message_id` in sync via a new `Registry.updateThread` helper. Manual smoke (2025-11-26 15:45 local) confirmed `start`/`send` flows work end-to-end against the real Codex CLI. `codex exec resume` still requires a prompt body, so the current `pull` prototype cannot poll passively; follow-up design is needed if we want a zero-message “check for updates” action.
+**Status (2025-11-26):** ✅ Completed – `start`/`send` share the exec runner, append NDJSON logs, and keep `last_message_id` in sync via a new `Registry.updateThread` helper. Manual smoke (2025-11-26 15:45 local) confirmed `start`/`send` flows work end-to-end against the real Codex CLI. The read-only side is now split into:
+
+- `peek` (new name for the earlier `pull` concept) which only surfaces the newest unseen assistant message for a thread, writes it to `--output-last`, prints “No updates …” when nothing changed, and never resumes Codex. Registry tracks `last_pulled_id` (aka `last_peeked_id`) per thread so repeated peeks stay O(1).
+- `log` (planned follow-up) that prints NDJSON history with filters (`--tail`, `--since`, `--raw`). Unlike `peek`, it doesn’t touch registry state.
+
+We still have the option to add a future `poll` command if Codex ever supports a true “resume-without-prompt” flow.
 
 **Files:**
 
 - Modify: `src/bin/codex-subagent.ts`
-- Add: `src/commands/send.ts`, `src/commands/pull.ts`
-- Add tests: `tests/send-command.test.ts`, `tests/pull-command.test.ts`
+- Add: `src/commands/send.ts`, `src/commands/peek.ts`, `src/commands/log.ts`
+- Add tests: `tests/send-command.test.ts`, `tests/peek-command.test.ts`, `tests/log-command.test.ts`
 - Add fixtures for resume responses.
 
-**Step 1:** Write failing tests verifying `send` appends NDJSON to `logs/<thread>.ndjson` and updates `last_message_id`, while `pull` only writes when new message ID available and respects `--output-last-message` path.
+**Step 1:** Write failing tests verifying `send` appends NDJSON to `logs/<thread>.ndjson` and updates `last_message_id`. `peek` should read the existing log and surface only the latest unseen assistant message, updating `last_pulled_id`, while `log` streams formatted or raw history (`--tail`, `--raw`).
 
-**Step 2:** Implement send/pull commands invoking `execRunner.runExec` with `resume <thread>` and optional empty prompt. Ensure log writer handles concurrency via appendFile + newline.
+**Step 2:** Implement send/peek/log commands. `send` continues to invoke `execRunner.runExec` with `resume <thread>`. `peek` and `log` never hit Codex—they strictly read the NDJSON log and registry state, keeping output focused and reproducible.
 
 **Step 3:** Expand `Registry` TS module with `updateThread` helper (mirroring Python behavior). Rerun targeted tests, plus `npm run lint` and `npm run typecheck`. Commit once green.
 
@@ -287,9 +292,9 @@ npm run test
 - Tests: `tests/show-log-command.test.ts`
 - Scripts: `scripts/demo-start-and-pull.ts` (tsx runnable)
 
-**Step 1:** Write vitest ensuring `show-log` pretty prints NDJSON entries with timestamps, and `watch` polls `pull` on interval (use fake timers/mocks).
+**Step 1:** Write vitest ensuring `show-log` pretty prints NDJSON entries with timestamps, and `watch` polls `peek`/`send` data on interval (use fake timers/mocks).
 
-**Step 2:** Implement commands, ensuring watch reuses `pull` logic and respects ctrl-c.
+**Step 2:** Implement commands, ensuring watch reuses `peek` logic and respects ctrl-c.
 
 **Step 3:** Add manual demo script calling `npm run demo` (wired in package.json) to spawn a harmless thread and tail output via `watch`. Commit.
 
@@ -305,7 +310,7 @@ npm run test
 - Add `docs/codex-subagent-workflow.md` describing async subagent lifecycle.
 - Ensure `package-lock.json` committed.
 
-**Step 1:** Document standard flows (start/send/pull/show-log/watch), mention `--output-last-message`, `--policy` presets, and `npm run lint/test/format` expectations.
+**Step 1:** Document standard flows (start/send/peek/log/watch), mention `--output-last-message`, `--policy` presets, and `npm run lint/test/format` expectations.
 
 **Step 2:** Run `npm run format:fix && npm run lint && npm run typecheck && npm run test`. Update `README` with verification output snippet.
 
@@ -316,5 +321,5 @@ npm run test
 ### Verification & Next Steps
 
 1. Run `npm run lint && npm run typecheck && npm run test && npm run build`.
-2. Execute manual smoke: `node dist/codex-subagent.js start ...` followed by `node dist/codex-subagent.js list/pull/show-log` against a test thread; capture outputs for future PR.
+2. Execute manual smoke: `node dist/codex-subagent.js start ...` followed by `node dist/codex-subagent.js list/peek/log` against a test thread; capture outputs for future PR.
 3. Tag future enhancements (multi-thread dashboards, JSON export) but keep MVP lean.
