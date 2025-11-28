@@ -48,6 +48,7 @@ This absolute path works no matter which repository the parent Codex session is 
 | `log`   | View the stored NDJSON history (supports `--tail`, `--raw`, `--verbose`). |
 | `status`| Summarize the latest activity for a thread (latest message, idle time, optional log tail). |
 | `watch` | Continuously peek a thread at an interval (use `--duration-ms` to exit cleanly). |
+| `wait`  | Block until specific threads (or labels/all threads) reach a stopped state; optional timeout + “follow last assistant” output. |
 | `archive` | Move completed thread logs/state into `.codex-subagent/archive/...` (with `--yes`/`--dry-run`). |
 | `label` | Attach/update a friendly label for a thread so `list` is easier to scan. |
 | `list`  | List every thread owned by the current controller.           |
@@ -55,11 +56,13 @@ This absolute path works no matter which repository the parent Codex session is 
 Per-command notes:
 
 - `start` requires `--role`, `--policy`, and `--prompt-file` (write prompts to files to avoid shell quoting issues). Policies are mapped to safe `--sandbox` / `--profile` combinations automatically.
+- `start --manifest tasks.json` (or `--manifest-stdin`) launches multiple prompts from a single JSON payload. Each task entry accepts `prompt`, `role`, `policy`, `cwd`, `label`, `persona`, `outputLast`, and `wait`. This is the fastest way to spin up a whole squad of helpers; reference prompts inline in JSON so you don’t have to create dozens of temp files.
 - `start` warns that long-running Codex sessions may take minutes or hours. Use the default detached mode when you just want the work to continue in the background, and `--wait` when you truly need to stream the run inline.
 - `start`/`send` accept `--cwd <path>` to automatically prepend “work inside /path” instructions, `--label` to tag new threads, and `--persona <name>` to merge Anthropic-style agent personas (project `.codex/agents/`, `~/.codex/agents/`, superpowers `agents/`). Model aliases (`haiku`, `sonnet`, `opus`, `inherit`) are mapped onto safe Codex policies; if a persona sets `model: sonnet`, we’ll use `workspace-write`, etc.
 - `send` needs `--thread` + `--prompt-file` and, like `start`, runs detached unless you pass `--wait`. If a persona was set when the thread started, later `send` calls reuse the same persona automatically unless you override it with `--persona`.
 - `peek`, `log`, `watch` all require `--thread` and never call Codex (they read the local log/registry). `peek`/`log` accept `--verbose` to print last activity timestamps even when nothing changed; `watch` adds `--duration-ms` so you can stop polling automatically instead of relying on Ctrl+C.
 - `status --thread <id> [--tail 5] [--stale-minutes 15]` gives a one-shot summary (latest assistant turn, idle duration, and a suggestion to nudge if the thread has been idle longer than the threshold).
+- `wait --threads id1,id2 --follow-last` polls the registry/logs until every selected thread stops. Use `--labels label-a,label-b` or `--all-controller` to track batches launched via manifests, `--interval-ms` to tune polling frequency, and `--timeout-ms` to fail fast instead of waiting forever. When `--follow-last` is set you’ll also see the final assistant reply for each thread as it finishes.
 - `label --thread <id> --label "Task X"` lets you rename an existing thread after the fact (pass an empty string to clear it).
 - `archive --thread <id> --yes` moves a completed thread into the archive. Use `--completed --yes` to archive all completed threads, or `--dry-run` to preview.
 

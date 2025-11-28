@@ -1,29 +1,10 @@
 import process from 'node:process';
-import { access, readFile } from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
 import { Writable } from 'node:stream';
 import { Paths } from '../lib/paths.ts';
 import { Registry } from '../lib/registry.ts';
 import { assertThreadOwnership } from '../lib/thread-ownership.ts';
 import { formatRelativeTime } from '../lib/time.ts';
-
-interface LoggedMessage {
-  id: string;
-  text?: string;
-  created_at?: string;
-}
-
-function parseLogLine(line: string): LoggedMessage | undefined {
-  try {
-    const parsed = JSON.parse(line);
-    if (parsed && typeof parsed.id === 'string') {
-      return parsed as LoggedMessage;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
+import { readLogLines, parseLogLine, LoggedMessage } from '../lib/log-lines.ts';
 
 export interface StatusCommandOptions {
   rootDir?: string;
@@ -64,17 +45,7 @@ export async function statusCommand(options: StatusCommandOptions): Promise<void
   }
 
   const logPath = paths.logFile(options.threadId);
-  let lines: string[] = [];
-  try {
-    await access(logPath, fsConstants.F_OK);
-    const raw = await readFile(logPath, 'utf8');
-    lines = raw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-  } catch {
-    lines = [];
-  }
+  const lines = await readLogLines(logPath);
 
   const messages = lines
     .map(parseLogLine)

@@ -12,12 +12,40 @@ Install (or reinstall) via `npm install --prefix ~/.codex/skills/using-subagents
   --prompt-file task.txt [--cwd /path/to/repo] [--persona code-reviewer] [--label "Task Name"] \
   [--output-last last.txt] [--controller-id demo-doc] [--wait]
 ```
-
 - Write prompts to files to avoid shell quoting issues.
 - `workspace-write` is the recommended policy; custom policy names only work if you have matching Codex profiles configured. When you pass `--persona`, the persona’s `model` field remaps the sandbox (e.g., `haiku` → `read-only`, `sonnet` → `workspace-write`).
 - **Detached by default:** without `--wait`, `start` spawns a background Codex process and returns immediately. Long-running tasks may take minutes or hours; use `peek`/`log` later to inspect results, or add `--wait` when you need to stream the entire run inline.
 - A new thread entry is persisted under `.codex-subagent/state/threads.json`, with NDJSON logs under `.codex-subagent/logs/<thread>.ndjson`.
 - Personas live (in priority order) under `.codex/agents/` in the project, `~/.codex/agents/`, and the superpowers `agents/` directory. Their prompts and referenced skills are injected automatically, and the persona name is stored with the thread.
+
+### Launch a batch with `start --manifest`
+
+When you need several helpers at once, put them in a JSON manifest instead of hand-building prompt files:
+
+```jsonc
+[
+  {
+    "prompt": "You are Alpha...",
+    "role": "researcher",
+    "policy": "workspace-write",
+    "cwd": "/repo/a",
+    "label": "Alpha task"
+  },
+  {
+    "prompt": "You are Beta...",
+    "persona": "code-reviewer",
+    "wait": true
+  }
+]
+```
+
+Save it as `tasks.json` (or pipe the JSON to stdin) and run:
+
+```
+codex-subagent start --policy workspace-write --role researcher --manifest tasks.json
+```
+
+Per-entry `role`, `policy`, `cwd`, `label`, `persona`, `outputLast`, and `wait` override the CLI defaults; unspecified fields inherit the CLI/defaults block at the top of the manifest. Detached entries return immediately, while entries with `wait: true` behave like inline `start --wait`. The summary printed at the end shows which tasks detached vs. waited and the thread IDs for waited entries—capture those IDs if you need to resume them later.
 
 ## 2. Resume with Context (Optional)
 
@@ -58,6 +86,22 @@ codex-subagent watch --thread <thread_id> \
 ```
 
 Ctrl+C stops the loop. `npm run demo` shows a complete start → watch flow end-to-end. Pass `--duration-ms` when you want the command to stop automatically after a fixed window (helpful when you’re running inside automation and don’t want shell timeouts to show up as failures).
+
+### Wait for a batch to finish
+
+Use `wait` when you want to block until a set of detached threads reaches a terminal state:
+
+```
+codex-subagent wait \
+  --threads thread-1,thread-2 \
+  [--labels "Task A","Task B"] \
+  [--all-controller] \
+  [--interval-ms 5000] [--timeout-ms 1800000] [--follow-last]
+```
+
+- Supply explicit thread IDs, labels, or `--all-controller` (to track everything owned by this Codex session). Labels pair nicely with manifest-launched tasks—label each entry and then wait on the labels instead of thread IDs.
+- `--follow-last` prints the most recent assistant message for each thread the moment it completes, so you can quickly summarize the outcomes in your main session.
+- `--timeout-ms` fails fast instead of waiting forever; combine it with `--interval-ms` (default 5000) to tune polling frequency.
 
 ## 5. Status Checks & Labels
 

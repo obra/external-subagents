@@ -114,22 +114,22 @@
 
 ### Task 7: Parallel start + wait orchestration
 
-**Goal:** Allow Codex to kick off multiple subagents at once and optionally block until a selected set reaches `stopped`/`archived`.
+**Goal:** Extend the existing `start` command so it can launch multiple subagents from a single manifest file (no separate `mstart` command) and add a `wait` command that blocks until selected threads finish.
 
 **Files:**
-- Modify: `src/commands/start.ts`, `src/lib/start-thread.ts`
-- Create: `src/commands/mstart.ts`, `src/commands/wait.ts`
-- Update: `src/bin/codex-subagent.ts`
-- Tests: `tests/mstart-command.test.ts`, `tests/wait-command.test.ts`
+- Modify: `src/commands/start.ts`, `src/lib/start-thread.ts`, `src/workers/start-runner.ts`
+- Create: `src/commands/wait.ts`
+- Update: `src/bin/codex-subagent.ts`, `docs/codex-subagent-workflow.md`, `.codex/skills/using-subagents-as-codex/SKILL.md`
+- Tests: `tests/start-command.test.ts`, `tests/wait-command.test.ts`, plus helpers for manifest fixtures
 
 **Steps:**
-1. Design JSON (or YAML) manifest format describing multiple prompts in one payload (role, prompt, cwd, persona, label, controller override). Include validation + helpful errors before launching any subagent.
-2. Implement `codex-subagent mstart --file manifest.json` that launches each entry sequentially but without waiting (`--wait` opt-in per entry). Default detached mode; surface thread IDs and labels for tracking.
-3. Implement `codex-subagent wait --threads <id,id,...>` (or `--all`/`--label <name>`) that polls registry+logs until each thread reaches terminal state. Provide `--interval-ms`, `--timeout`, and support `--follow-last` to show final assistant reply once finished.
-4. Update registry helpers to expose running vs stopped to support wait logic; ensure `list/status` reuse without duplicating code.
-5. Add tests covering JSON manifest parsing, error handling (missing prompt, invalid persona), wait timeouts, and success paths using fake registry/log fixtures.
-6. Document CLI help text for both commands and warn that blocking waits may take minutes.
-7. Commit: `feat: add multi-start and wait commands`.
+1. Define a manifest JSON format (array or object with `tasks[]`) where each entry contains `prompt`, `role`, `policy`, optional `cwd`, `label`, `persona`, `outputLast`, `wait`, etc. Validate before launching anything; show actionable errors and refuse to partially start when validation fails.
+2. Add `--manifest <path>` and `--manifest-stdin` flags to `start`. When provided, load tasks, merge CLI defaults (policy/role flags may act as defaults), and launch each subagent in detached mode unless per-task `wait` is true. Continue supporting single `--prompt-file` usage for backward compatibility.
+3. Print a summary table after manifest launch showing thread IDs (or “pending” if detached), labels, and prompts. Ensure controller-id inference applies to all threads, and persona/model logic runs per task.
+4. Implement `codex-subagent wait` that polls registry/log state for specified threads (via `--threads id1,id2`, `--labels`, or `--all-controller`). Support `--interval-ms`, `--timeout-ms`, and `--show-last` to output the last assistant reply upon completion. Provide exit code 1 when timeout expires first.
+5. Add unit tests that cover manifest parsing, error propagation (missing prompt, invalid JSON), waiting logic (threads transition to completed, timeout path), and integration with registry mocks. Update existing start tests to cover manifest input + `--wait` interplay.
+6. Document the new `start --manifest` and `wait` workflows in README/workflow docs/skill, emphasizing default detached behavior and warning that `--wait` may take minutes.
+7. Commit: `feat: extend start with manifest + wait command`.
 
 ---
 

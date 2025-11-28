@@ -1,5 +1,6 @@
 import process from 'node:process';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { listCommand } from '../commands/list.ts';
 import { startCommand } from '../commands/start.ts';
 import { sendCommand } from '../commands/send.ts';
@@ -9,8 +10,10 @@ import { watchCommand } from '../commands/watch.ts';
 import { statusCommand } from '../commands/status.ts';
 import { archiveCommand } from '../commands/archive.ts';
 import { labelCommand } from '../commands/label.ts';
+import { waitCommand } from '../commands/wait.ts';
 import { RegistryLoadError } from '../lib/registry.ts';
 import { getControllerId } from '../lib/controller-id.ts';
+import { parseStartManifest, StartManifest } from '../lib/start-manifest.ts';
 
 interface ParsedArgs {
   command: string;
@@ -64,6 +67,8 @@ interface StartFlags {
   workingDir?: string;
   label?: string;
   persona?: string;
+  manifestPath?: string;
+  manifestFromStdin?: boolean;
 }
 
 function parseStartFlags(args: string[]): StartFlags {
@@ -121,6 +126,16 @@ function parseStartFlags(args: string[]): StartFlags {
         flags.persona = next;
         i++;
         break;
+      case '--manifest':
+        if (!next) {
+          throw new Error('--manifest flag requires a path');
+        }
+        flags.manifestPath = path.resolve(next);
+        i++;
+        break;
+      case '--manifest-stdin':
+        flags.manifestFromStdin = true;
+        break;
       case '--wait':
         flags.wait = true;
         break;
@@ -129,6 +144,44 @@ function parseStartFlags(args: string[]): StartFlags {
     }
   }
   return flags;
+}
+
+async function loadManifestFromFlags(flags: StartFlags): Promise<StartManifest> {
+  if (flags.manifestPath && flags.manifestFromStdin) {
+    throw new Error('Use either --manifest or --manifest-stdin, not both.');
+  }
+
+  if (flags.manifestPath) {
+    const body = await readFile(flags.manifestPath, 'utf8');
+    const parsed = JSON.parse(body);
+    return parseStartManifest(parsed, flags.manifestPath);
+  }
+
+  if (flags.manifestFromStdin) {
+    const body = await readStdin();
+    if (!body.trim()) {
+      throw new Error('Manifest JSON from stdin was empty.');
+    }
+    const parsed = JSON.parse(body);
+    return parseStartManifest(parsed, 'stdin');
+  }
+
+  throw new Error('Manifest flags were requested but no manifest source was provided.');
+}
+
+function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: string[] = [];
+    process.stdin.on('data', (chunk) => {
+      if (typeof chunk === 'string') {
+        chunks.push(chunk);
+      } else {
+        chunks.push(chunk.toString('utf8'));
+      }
+    });
+    process.stdin.on('end', () => resolve(chunks.join('')));
+    process.stdin.on('error', (error) => reject(error));
+  });
 }
 
 interface SendFlags {
@@ -251,6 +304,15 @@ interface ArchiveFlags {
   completed?: boolean;
   yes?: boolean;
   dryRun?: boolean;
+}
+
+interface WaitFlags {
+  threads?: string[];
+  labels?: string[];
+  all?: boolean;
+  intervalMs?: number;
+  timeoutMs?: number;
+  followLast?: boolean;
 }
 
 function parseLogFlags(args: string[]): LogFlags {
@@ -388,6 +450,59 @@ function parseLabelFlags(args: string[]): LabelFlags {
   return flags;
 }
 
+function parseWaitFlags(args: string[]): WaitFlags {
+  const flags: WaitFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+    switch (arg) {
+      case '--threads':
+        if (!next) {
+          throw new Error('--threads flag requires a comma-separated list of thread IDs');
+        }
+        flags.threads = next.split(',').map((value) => value.trim()).filter(Boolean);
+        i++;
+        break;
+      case '--labels':
+        if (!next) {
+          throw new Error('--labels flag requires a comma-separated list of labels');
+        }
+        flags.labels = next.split(',').map((value) => value.trim()).filter(Boolean);
+        i++;
+        break;
+      case '--all-controller':
+        flags.all = true;
+        break;
+      case '--interval-ms':
+        if (!next) {
+          throw new Error('--interval-ms flag requires a value');
+        }
+        flags.intervalMs = Number(next);
+        if (Number.isNaN(flags.intervalMs) || flags.intervalMs! <= 0) {
+          throw new Error('--interval-ms must be greater than 0');
+        }
+        i++;
+        break;
+      case '--timeout-ms':
+        if (!next) {
+          throw new Error('--timeout-ms flag requires a value');
+        }
+        flags.timeoutMs = Number(next);
+        if (Number.isNaN(flags.timeoutMs) || flags.timeoutMs! <= 0) {
+          throw new Error('--timeout-ms must be greater than 0');
+        }
+        i++;
+        break;
+      case '--follow-last':
+        flags.followLast = true;
+        break;
+      default:
+        throw new Error(`Unknown flag for wait command: ${arg}`);
+    }
+  }
+  return flags;
+}
+
 interface WatchFlags {
   threadId?: string;
   intervalMs?: number;
@@ -454,6 +569,7 @@ function printHelp(): void {
     '  log             Print the stored log for a thread (no Codex call)',
     '  status          Summarize the latest activity for a thread',
     '  watch           Continuously peek a thread until interrupted',
+    '  wait            Block until threads reach a stopped state',
     '  archive         Move completed thread logs/state into archive',
     '  label           Attach or update a friendly label for a thread',
     '',
@@ -468,6 +584,8 @@ function printHelp(): void {
   '    --cwd <path>          Optional working directory instruction for the subagent',
   '    --label <text>        Optional friendly label stored with the thread',
   '    --persona <name>      Optional persona to load from .codex/agents',
+  '    --manifest <path>     Launch multiple tasks defined in a JSON manifest',
+  '    --manifest-stdin      Read manifest JSON from stdin',
   '    --wait                Block until Codex finishes (default: detach)',
   '  send flags:',
   '    --thread <id>         Target thread to resume (required)',
@@ -503,6 +621,13 @@ function printHelp(): void {
   '  label flags:',
   '    --thread <id>         Target thread to label (required)',
   '    --label <text>        Friendly label text (empty string clears it)',
+  '  wait flags:',
+  '    --threads <ids>       Comma-separated thread IDs to wait on',
+  '    --labels <labels>     Comma-separated labels to wait on',
+  '    --all-controller      Wait for every thread owned by this controller',
+  '    --interval-ms <n>     Polling interval (default 5000)',
+  '    --timeout-ms <n>      Optional timeout before exiting with failure',
+  '    --follow-last         Print the last assistant message when each thread stops',
   '',
   'Examples:',
   '  # Launch a detached researcher subagent',
@@ -548,17 +673,22 @@ async function run(): Promise<void> {
     case 'start':
       try {
         const flags = parseStartFlags(rest);
+        let manifest: StartManifest | undefined;
+        if (flags.manifestPath || flags.manifestFromStdin) {
+          manifest = await loadManifestFromFlags(flags);
+        }
         await startCommand({
           rootDir,
-          role: flags.role ?? '',
-          policy: flags.policy ?? '',
-          promptFile: flags.promptFile ?? '',
+          role: flags.role,
+          policy: flags.policy,
+          promptFile: flags.promptFile,
           outputLastPath: flags.outputLastPath,
           wait: Boolean(flags.wait),
           controllerId,
           workingDir: flags.workingDir,
           label: flags.label,
           personaName: flags.persona,
+          manifest,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -647,6 +777,34 @@ async function run(): Promise<void> {
             durationMs: flags.durationMs,
             signal: controller.signal,
             controllerId,
+          });
+        } finally {
+          process.off('SIGINT', handleSigint);
+        }
+      } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      break;
+    case 'wait':
+      try {
+        const flags = parseWaitFlags(rest);
+        const controller = new AbortController();
+        const handleSigint = () => {
+          controller.abort();
+        };
+        process.on('SIGINT', handleSigint);
+        try {
+          await waitCommand({
+            rootDir,
+            controllerId,
+            threadIds: flags.threads,
+            labels: flags.labels,
+            includeAll: Boolean(flags.all),
+            intervalMs: flags.intervalMs,
+            timeoutMs: flags.timeoutMs,
+            followLast: Boolean(flags.followLast),
+            signal: controller.signal,
           });
         } finally {
           process.off('SIGINT', handleSigint);

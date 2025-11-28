@@ -170,11 +170,15 @@ describe('send command', () => {
 
     expect(runExec).not.toHaveBeenCalled();
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const spawnArgs = spawnMock.mock.calls[0];
+    const spawnArgs = (spawnMock.mock.calls[0] as unknown[]) ?? [];
     expect(spawnArgs[0]).toBe(process.execPath);
-    expect(spawnArgs[2]).toMatchObject({ detached: true, stdio: 'ignore' });
+    expect(spawnArgs[2] as Record<string, unknown>).toMatchObject({
+      detached: true,
+      stdio: 'ignore',
+    });
 
-    const payloadBase64 = spawnArgs[1][2];
+    const spawnArgv = spawnArgs[1] as string[];
+    const payloadBase64 = spawnArgv[2];
     const payloadJson = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
     expect(payloadJson).toMatchObject({
       threadId: 'thread-123',

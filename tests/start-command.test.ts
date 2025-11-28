@@ -131,11 +131,15 @@ describe('start command', () => {
     expect(runExec).not.toHaveBeenCalled();
     expect(spawnMock).toHaveBeenCalledTimes(1);
 
-    const spawnArgs = spawnMock.mock.calls[0];
+    const spawnArgs = (spawnMock.mock.calls[0] as unknown[]) ?? [];
     expect(spawnArgs[0]).toBe(process.execPath);
-    expect(spawnArgs[2]).toMatchObject({ detached: true, stdio: 'ignore' });
+    expect(spawnArgs[2] as Record<string, unknown>).toMatchObject({
+      detached: true,
+      stdio: 'ignore',
+    });
 
-    const payloadBase64 = spawnArgs[1][2];
+    const spawnArgv = spawnArgs[1] as string[];
+    const payloadBase64 = spawnArgv[2];
     const payloadJson = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
     expect(payloadJson).toMatchObject({
       role: 'analyst',
@@ -226,5 +230,86 @@ describe('start command', () => {
     expect(thread.persona).toBe('reviewer');
 
     homedirSpy.mockRestore();
+  });
+
+  it('launches manifest tasks with mixed wait modes and prints a summary', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-manifest-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+    const fixture = await loadFixture();
+    const waitedFixture = { ...fixture, thread_id: 'thread-wait-manifest' };
+
+    vi.mocked(runExec).mockResolvedValueOnce(waitedFixture);
+
+    const manifest = {
+      tasks: [
+        {
+          prompt: 'Detached prompt body',
+          role: 'analyst',
+          policy: 'workspace-write',
+          label: 'Detached Task',
+        },
+        {
+          prompt: 'Waited prompt body',
+          wait: true,
+          label: 'Waited Task',
+        },
+      ],
+    };
+
+    const { stdout, output } = captureOutput();
+    await startCommand({
+      rootDir: codexRoot,
+      controllerId: 'controller-manifest',
+      manifest,
+      role: 'researcher',
+      policy: 'workspace-write',
+      stdout,
+    });
+
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    const spawnArgs = (spawnMock.mock.calls[0] as unknown[]) ?? [];
+    const manifestSpawnArgv = spawnArgs[1] as string[];
+    const payloadBase64 = manifestSpawnArgv[2];
+    const payloadJson = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
+    expect(payloadJson.promptBody).toBe('Detached prompt body');
+    expect(payloadJson.label).toBe('Detached Task');
+
+    expect(runExec).toHaveBeenCalledTimes(1);
+    const execCall = vi.mocked(runExec).mock.calls[0]?.[0];
+    expect(execCall?.promptBody).toBe('Waited prompt body');
+
+    const registryPath = path.join(codexRoot, 'state', 'threads.json');
+    const registryRaw = await readFile(registryPath, 'utf8');
+    const registry = JSON.parse(registryRaw);
+    expect(registry['thread-wait-manifest'].role).toBe('researcher');
+
+    const summary = output.join('');
+    expect(summary).toContain('Launched 2 manifest tasks');
+    expect(summary).toContain('thread-wait-manifest');
+    expect(summary).toContain('Detached Task');
+  });
+
+  it('fails fast when manifest task is missing prompt content', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-manifest-invalid-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+
+    const manifest = {
+      tasks: [
+        {
+          role: 'researcher',
+          policy: 'workspace-write',
+        },
+      ],
+    };
+
+    await expect(
+      startCommand({
+        rootDir: codexRoot,
+        controllerId: 'controller-manifest',
+        manifest,
+        role: 'researcher',
+        policy: 'workspace-write',
+      })
+    ).rejects.toThrow(/manifest task 0/i);
   });
 });

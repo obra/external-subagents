@@ -21,27 +21,30 @@ Use this skill any time the main Codex session might benefit from parallel or lo
 - **Always encode the workspace path in the prompt file.** Start each prompt with something like “Work inside `/Users/jesse/.../repo`; run all commands there” so the helper doesn’t guess (or touch the wrong repo).
 - **Default to `peek`.** Use `peek` for “what’s new?” checks and reserve `watch --duration-ms …` for short-lived polls. It keeps the main session quiet and avoids giant NDJSON dumps.
 - **Detach unless you absolutely need streaming.** `start`/`send` default to background mode so you can keep working; add `--wait` only when you need live streaming.
+- **Batch launches via manifests.** `start --manifest tasks.json` (or `--manifest-stdin`) lets you describe several prompts/personas in one JSON file so you don’t litter the repo with throwaway prompt files. Pair manifest labels with `wait --labels …` to block on the entire batch completing.
 
 ## Workflow (Do This Every Time)
 1. **Prep prompt**: Write the request to a prompt file (`task.txt`, `followup.txt`). Never inline multi-line prompts; this avoids shell quoting issues and leaves an audit trail. **Always include the repo/workdir instructions** (e.g., “Work inside `/path/to/repo`”) so the helper never guesses.
-2. **Launch**: `~/.codex/skills/using-subagents-as-codex/codex-subagent start --role <role> --policy workspace-write --prompt-file task.txt [--output-last last.txt] [--controller-id my-session] [--wait]`. Detached mode is the default—Codex keeps running for minutes/hours while the CLI returns immediately. Add `--wait` only when you need to sit in the session until Codex finishes.
+2. **Launch**: `~/.codex/skills/using-subagents-as-codex/codex-subagent start --role <role> --policy workspace-write --prompt-file task.txt [--output-last last.txt] [--controller-id my-session] [--wait]`. Detached mode is the default—Codex keeps running for minutes/hours while the CLI returns immediately. Add `--wait` only when you need to sit in the session until Codex finishes. When launching a batch, pass `--manifest tasks.json` instead of `--prompt-file` so each entry can specify its own prompt/label/persona (detached by default, per-entry `wait: true` will block inline).
 3. **Inspect**: Use `peek --thread <id> [--output-last last.txt]` to fetch the newest unseen assistant message without resuming; it updates `last_pulled_id` so repeated peeks are quiet when nothing changed. This is your default “what happened?” command—reach for `watch` only when you really need repeated polling.
 4. **Resume**: When you have follow-up instructions, `send --thread <id> --prompt-file followup.txt [--cwd /repo/path] [--wait]`. Policy/role come from the registry; you only supply the new prompt file, and `--wait` is optional when you want to block until the resumed turn completes (otherwise it detaches like `start`).
 5. **Request code review**: When dispatching review subagents, explicitly say “Use the template from requesting-code-review/code-reviewer.md; the code-reviewer skill isn’t installed here.” That keeps reviewers from trying `use-skill code-reviewer` and ensures they follow the right template.
 6. **Review history**: `log --thread <id> [--tail 20] [--raw]` prints NDJSON history; grep/pipe as needed. Add `--verbose` when you want the “last activity …” summary even if nothing new printed.
 7. **Watch if needed**: For “any updates yet?” loops, run `watch --thread <id> [--interval-ms 5000] [--duration-ms 60000] [--controller-id ...]`. It repeatedly runs `peek`; stop with Ctrl+C or let `--duration-ms` stop it automatically during demos.
-8. **Record outcomes**: After each peek/log/watch, paste the relevant sentence back into your main Codex convo so teammates know the status.
-9. **Demo sanity check**: On new machines, run `npm run demo` once to ensure `start` + `watch` wiring works locally.
+8. **Wait for batches**: When you’ve launched several detached helpers (especially via `--manifest`), run `wait --threads id1,id2` or `wait --labels "Task 1","Task 2"` so the CLI blocks until each thread reaches a terminal state. Add `--follow-last` to print the final assistant reply per thread, and `--timeout-ms` to bail out if they stall. This keeps you from spam-checking `peek` in a loop.
+9. **Record outcomes**: After each peek/log/watch, paste the relevant sentence back into your main Codex convo so teammates know the status.
+10. **Demo sanity check**: On new machines, run `npm run demo` once to ensure `start` + `watch` wiring works locally.
 
 ## Quick Reference
 | Command | Required | Optional | Notes |
 | --- | --- | --- | --- |
-| `start` | `--role`, `--policy`, `--prompt-file` | `--output-last`, `--controller-id`, `--root`, `--cwd`, `--label`, `--persona` | Launches new thread; refuses “allow everything”. `--cwd` prepends a “work inside …” instruction; `--label` + `--persona` add friendlier metadata. |
+| `start` | `--role`, `--policy`, `--prompt-file` **or** `--manifest` | `--output-last`, `--controller-id`, `--root`, `--cwd`, `--label`, `--persona`, per-manifest `wait`/`outputLast` | Launches new thread(s); refuses “allow everything”. `--manifest` lets you describe many prompts at once, each with its own label/persona/`wait`. |
 | `send` | `--thread`, `--prompt-file` | `--output-last`, `--controller-id`, `--wait`, `--cwd`, `--persona` | Resumes existing thread; detached by default, add `--wait` to block. Missing `--persona` means “reuse whatever the thread already had.” |
 | `peek` | `--thread` | `--output-last`, `--controller-id`, `--verbose` | Reads newest unseen assistant message only. |
 | `log` | `--thread` | `--tail <n>`, `--raw`, `--controller-id`, `--verbose` | Reads stored NDJSON history, optionally appending “last activity …”. |
 | `status` | `--thread` | `--tail`, `--raw`, `--stale-minutes` | One-shot summary (latest turn, idle duration, follow-up suggestion). |
 | `watch` | `--thread` | `--interval-ms`, `--output-last`, `--duration-ms`, `--controller-id` | Loops `peek` until stopped (or until `--duration-ms` elapses). |
+| `wait` | selection (`--threads`, `--labels`, or `--all-controller`) | `--interval-ms`, `--timeout-ms`, `--follow-last`, `--controller-id` | Polls the registry/logs until every selected thread stops. Perfect for `--manifest` batches; `--follow-last` prints their final assistant replies. |
 | `label` | `--thread`, `--label` | `--controller-id` | Attaches/updates a friendly label (empty string clears it). |
 | `archive` | *(none)* | `--thread`, `--completed`, `--yes`, `--dry-run`, `--controller-id` | Moves completed threads + logs under `.codex-subagent/archive/…`. |
 | `list` | *(none)* | `--controller-id`, `--root` | Shows threads owned by current controller (running threads first, relative timestamps). |

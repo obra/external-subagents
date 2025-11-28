@@ -11,7 +11,8 @@ export interface StartThreadWorkflowOptions {
   rootDir?: string;
   role: string;
   policy: string;
-  promptFile: string;
+  promptFile?: string;
+  promptBody?: string;
   outputLastPath?: string;
   controllerId: string;
   workingDir?: string;
@@ -26,6 +27,10 @@ export interface StartThreadWorkflowResult {
 export async function runStartThreadWorkflow(
   options: StartThreadWorkflowOptions
 ): Promise<StartThreadWorkflowResult> {
+  if (!options.promptBody && !options.promptFile) {
+    throw new Error('runStartThreadWorkflow requires a prompt body or file.');
+  }
+
   const paths = new Paths(options.rootDir);
   await paths.ensure();
 
@@ -33,7 +38,8 @@ export async function runStartThreadWorkflow(
   const transformPrompt = (body: string) =>
     composePrompt(body, { workingDir: options.workingDir, persona: options.persona });
   const execResult = await runExec({
-    promptFile: path.resolve(options.promptFile),
+    promptFile: options.promptFile ? path.resolve(options.promptFile) : undefined,
+    promptBody: options.promptBody,
     outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
     transformPrompt,
     ...policyConfig,

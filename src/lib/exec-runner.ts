@@ -25,7 +25,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export interface ExecOptions {
-  promptFile: string;
+  promptFile?: string;
+  promptBody?: string;
   outputLastPath?: string;
   extraArgs?: string[];
   sandbox?: string;
@@ -53,7 +54,15 @@ function buildArgs(options: ExecOptions): string[] {
 
 export async function runExec(options: ExecOptions): Promise<ExecResult> {
   const args = buildArgs(options);
-  let promptBody = await readFile(path.resolve(options.promptFile), 'utf8');
+  let promptBody: string;
+  if (typeof options.promptBody === 'string') {
+    promptBody = options.promptBody;
+  } else if (options.promptFile) {
+    promptBody = await readFile(path.resolve(options.promptFile), 'utf8');
+  } else {
+    throw new Error('runExec requires either promptBody or promptFile.');
+  }
+
   if (options.transformPrompt) {
     promptBody = options.transformPrompt(promptBody);
   }
@@ -140,8 +149,18 @@ function formatCodexExecError(error: unknown): Error {
   let hint: string | undefined;
 
   if (isExecaError(error)) {
-    const stderr = error.stderr ?? '';
-    const stdout = error.stdout ?? '';
+    const stderr =
+      typeof error.stderr === 'string'
+        ? error.stderr
+        : Buffer.isBuffer(error.stderr)
+          ? error.stderr.toString('utf8')
+          : '';
+    const stdout =
+      typeof error.stdout === 'string'
+        ? error.stdout
+        : Buffer.isBuffer(error.stdout)
+          ? error.stdout.toString('utf8')
+          : '';
     hint = deriveRecoveryHint(stderr, stdout);
   }
 
