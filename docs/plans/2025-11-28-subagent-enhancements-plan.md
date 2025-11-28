@@ -109,3 +109,44 @@
 2. Manually run `~/.codex/skills/using-subagents-as-codex/codex-subagent --help` to confirm new flags appear.
 3. Optional: archive one of the demo threads to validate real-world behavior.
 4. Summarize changes for Jesse; prep next steps (Task 5/6 of thread-snapshot project, or upstream PR).
+
+---
+
+### Task 7: Parallel start + wait orchestration
+
+**Goal:** Allow Codex to kick off multiple subagents at once and optionally block until a selected set reaches `stopped`/`archived`.
+
+**Files:**
+- Modify: `src/commands/start.ts`, `src/lib/start-thread.ts`
+- Create: `src/commands/mstart.ts`, `src/commands/wait.ts`
+- Update: `src/bin/codex-subagent.ts`
+- Tests: `tests/mstart-command.test.ts`, `tests/wait-command.test.ts`
+
+**Steps:**
+1. Design JSON (or YAML) manifest format describing multiple prompts in one payload (role, prompt, cwd, persona, label, controller override). Include validation + helpful errors before launching any subagent.
+2. Implement `codex-subagent mstart --file manifest.json` that launches each entry sequentially but without waiting (`--wait` opt-in per entry). Default detached mode; surface thread IDs and labels for tracking.
+3. Implement `codex-subagent wait --threads <id,id,...>` (or `--all`/`--label <name>`) that polls registry+logs until each thread reaches terminal state. Provide `--interval-ms`, `--timeout`, and support `--follow-last` to show final assistant reply once finished.
+4. Update registry helpers to expose running vs stopped to support wait logic; ensure `list/status` reuse without duplicating code.
+5. Add tests covering JSON manifest parsing, error handling (missing prompt, invalid persona), wait timeouts, and success paths using fake registry/log fixtures.
+6. Document CLI help text for both commands and warn that blocking waits may take minutes.
+7. Commit: `feat: add multi-start and wait commands`.
+
+---
+
+### Task 8: JSON prompt payloads for start/send
+
+**Goal:** Remove the requirement to write prompts to disk by allowing structured JSON passed via stdin/flag.
+
+**Files:**
+- Modify: `src/commands/start.ts`, `src/commands/send.ts`, `src/lib/prompt-loader.ts`
+- Update: `src/bin/codex-subagent.ts`
+- Tests: `tests/start-command.test.ts`, `tests/send-command.test.ts`
+- Docs: `README.md`, `docs/codex-subagent-workflow.md`, `.codex/skills/using-subagents-as-codex/SKILL.md`
+
+**Steps:**
+1. Define JSON schema (e.g., `{ "prompt": "...", "cwd": "...", "persona": "...", "skills": ["..."] }`). Support `--json-file` and stdin piping (`--json -`). Validate fields and surface actionable errors (missing prompt, invalid cwd path, persona not found).
+2. Teach `start`/`send` to prefer JSON payload when provided; fallback to prompt files for backward compatibility. Ensure controller-id inference still works (PID default) unless overridden by flag.
+3. Add ability to output generated prompt text with `--dry-run`/`--print-prompt` for debugging.
+4. Update docs/skill instructions with new workflow (recommend storing manifests in repo when collaboration needed, otherwise pipe JSON directly for ad-hoc tasks).
+5. Extend tests to cover JSON inputs, error paths, and persona integration. Include fixture verifying we no longer rely on temp prompt files.
+6. Commit: `feat: add JSON prompt input support`.
