@@ -18,6 +18,7 @@ export interface StartThreadWorkflowOptions {
   workingDir?: string;
   label?: string;
   persona?: PersonaRuntime;
+  launchId?: string;
 }
 
 export interface StartThreadWorkflowResult {
@@ -55,6 +56,7 @@ export async function runStartThreadWorkflow(
     controller_id: options.controllerId,
     label: options.label,
     persona: options.persona?.name,
+    launch_id: options.launchId,
   });
 
   const logPath = paths.logFile(execResult.thread_id);

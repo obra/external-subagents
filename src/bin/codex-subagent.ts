@@ -1157,6 +1157,7 @@ async function runWorkerStart(rest: string[]): Promise<void> {
       workingDir: asPath(payload.workingDir),
       label: asString(payload.label),
       persona: asPersonaRuntime(payload.persona),
+      launchId,
     });
     if (launchRegistry && launchId) {
       await launchRegistry.markSuccess(launchId, { threadId: result.threadId });

@@ -5,6 +5,7 @@ import { Paths } from '../lib/paths.ts';
 import { Registry, ThreadMetadata } from '../lib/registry.ts';
 import { assertThreadOwnership } from '../lib/thread-ownership.ts';
 import { readLogLines, parseLogLine } from '../lib/log-lines.ts';
+import { LaunchAttempt, LaunchRegistry } from '../lib/launch-registry.ts';
 
 export interface WaitCommandOptions {
   rootDir?: string;
@@ -126,30 +127,43 @@ async function getLastAssistantSummary(paths: Paths, threadId: string): Promise<
 interface TargetSelection {
   ids: string[];
   lookup: Map<string, ThreadMetadata>;
+  pendingLaunches: Map<string, LaunchAttempt>;
 }
 
 async function buildTargetSelection(
   registry: Registry,
+  launchRegistry: LaunchRegistry,
   controllerId: string,
   options: WaitCommandOptions
 ): Promise<TargetSelection> {
   const owned = await selectOwnedThreads(registry, controllerId);
   const selected = new Map<string, ThreadMetadata>();
+  const pendingLaunches = new Map<string, LaunchAttempt>();
+  const controllerLaunches = (await launchRegistry.listAttempts()).filter(
+    (attempt) => attempt.controller_id === controllerId && attempt.status === 'pending'
+  );
 
   if (options.includeAll) {
     for (const [threadId, thread] of owned.entries()) {
       selected.set(threadId, thread);
+    }
+    for (const attempt of controllerLaunches) {
+      pendingLaunches.set(attempt.id, attempt);
     }
   }
 
   if (options.labels && options.labels.length > 0) {
     for (const label of options.labels) {
       const matches = Array.from(owned.values()).filter((thread) => thread.label === label);
-      if (matches.length === 0) {
+      const pendingMatches = controllerLaunches.filter((attempt) => attempt.label === label);
+      if (matches.length === 0 && pendingMatches.length === 0) {
         throw new Error(`No threads found with label "${label}" for controller ${controllerId}`);
       }
       for (const match of matches) {
         selected.set(match.thread_id, match);
+      }
+      for (const attempt of pendingMatches) {
+        pendingLaunches.set(attempt.id, attempt);
       }
     }
   }
@@ -165,7 +179,7 @@ async function buildTargetSelection(
     }
   }
 
-  return { ids: Array.from(selected.keys()), lookup: selected };
+  return { ids: Array.from(selected.keys()), lookup: selected, pendingLaunches };
 }
 
 export async function waitCommand(options: WaitCommandOptions): Promise<void> {
@@ -194,21 +208,48 @@ export async function waitCommand(options: WaitCommandOptions): Promise<void> {
 
   const paths = new Paths(options.rootDir);
   const registry = new Registry(paths);
-  const selection = await buildTargetSelection(registry, options.controllerId, options);
+  const launchRegistry = new LaunchRegistry(paths);
+  const selection = await buildTargetSelection(registry, launchRegistry, options.controllerId, options);
 
-  if (selection.ids.length === 0) {
+  if (selection.ids.length === 0 && selection.pendingLaunches.size === 0) {
     throw new Error('No matching threads found for wait command.');
   }
 
   const pending = new Set(selection.ids);
+  const pendingLaunches = new Map(selection.pendingLaunches);
   const startTimestamp = now();
+  const targetCount = selection.ids.length + selection.pendingLaunches.size;
   stdout.write(
-    `Waiting for ${selection.ids.length} thread${selection.ids.length === 1 ? '' : 's'} to stop (interval ${intervalMs}ms).\n`
+    `Waiting for ${targetCount} thread${targetCount === 1 ? '' : 's'} to stop (interval ${intervalMs}ms).\n`
   );
 
-  while (pending.size > 0) {
+  while (pending.size > 0 || pendingLaunches.size > 0) {
     const snapshot = await registry.listThreads();
     const snapshotMap = new Map(snapshot.map((thread) => [thread.thread_id, thread]));
+    const launchThreadMap = new Map(
+      snapshot
+        .filter((thread) => thread.launch_id)
+        .map((thread) => [thread.launch_id as string, thread])
+    );
+    const launchAttempts = await launchRegistry.listAttempts();
+    const launchAttemptMap = new Map(launchAttempts.map((attempt) => [attempt.id, attempt]));
+
+    for (const [launchId, attempt] of Array.from(pendingLaunches.entries())) {
+      const current = launchAttemptMap.get(launchId) ?? attempt;
+      if (current.status === 'failed') {
+        const detail = current.error_message ?? 'launch failed';
+        const logHint = current.log_path ? ` (see ${current.log_path})` : '';
+        throw new Error(
+          `Launch ${launchId} failed before producing a thread: ${detail}${logHint}`
+        );
+      }
+      const linkedThread = launchThreadMap.get(launchId);
+      if (linkedThread) {
+        pending.add(linkedThread.thread_id);
+        selection.lookup.set(linkedThread.thread_id, linkedThread);
+        pendingLaunches.delete(launchId);
+      }
+    }
 
     for (const threadId of Array.from(pending)) {
       const entry = snapshotMap.get(threadId);
@@ -242,7 +283,7 @@ export async function waitCommand(options: WaitCommandOptions): Promise<void> {
       }
     }
 
-    if (pending.size === 0) {
+    if (pending.size === 0 && pendingLaunches.size === 0) {
       break;
     }
 
@@ -250,8 +291,8 @@ export async function waitCommand(options: WaitCommandOptions): Promise<void> {
       const elapsed = now() - startTimestamp;
       if (elapsed >= options.timeoutMs) {
         throw new Error(
-          `Timed out waiting for ${pending.size} thread${
-            pending.size === 1 ? '' : 's'
+          `Timed out waiting for ${pending.size + pendingLaunches.size} target${
+            pending.size + pendingLaunches.size === 1 ? '' : 's'
           } after ${formatDuration(options.timeoutMs)}`
         );
       }

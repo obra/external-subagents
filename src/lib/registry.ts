@@ -25,6 +25,7 @@ export interface ThreadMetadata {
   label?: string;
   persona?: string;
   error_message?: string;
+  launch_id?: string;
 }
 
 type ThreadMap = Record<string, ThreadMetadata>;

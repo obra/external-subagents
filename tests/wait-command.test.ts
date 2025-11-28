@@ -13,6 +13,7 @@ interface ThreadFixture {
   updated_at?: string;
   controller_id?: string;
   label?: string;
+  launch_id?: string;
 }
 
 async function writeRegistry(root: string, threads: Record<string, ThreadFixture>): Promise<void> {
@@ -20,6 +21,16 @@ async function writeRegistry(root: string, threads: Record<string, ThreadFixture
   await mkdir(stateDir, { recursive: true });
   const file = path.join(stateDir, 'threads.json');
   await writeFile(file, JSON.stringify(threads, null, 2), 'utf8');
+}
+
+async function writeLaunches(
+  root: string,
+  launches: Record<string, unknown>
+): Promise<void> {
+  const stateDir = path.join(root, 'state');
+  await mkdir(stateDir, { recursive: true });
+  const file = path.join(stateDir, 'launches.json');
+  await writeFile(file, JSON.stringify(launches, null, 2), 'utf8');
 }
 
 async function appendLog(root: string, threadId: string, lines: unknown[]): Promise<void> {
@@ -153,5 +164,60 @@ describe('wait command', () => {
     const text = output.join('');
     expect(text).toContain('thread-labeled');
     expect(text).toContain('Last assistant: All done');
+  });
+
+  it('waits for pending launches to register threads before completing', async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-wait-launch-'));
+    const codexRoot = path.join(workspace, '.codex-subagent');
+    await writeRegistry(codexRoot, {});
+    await writeLaunches(codexRoot, {
+      'launch-1': {
+        id: 'launch-1',
+        controller_id: 'controller-one',
+        type: 'start',
+        status: 'pending',
+        label: 'live-node-app',
+        created_at: '2025-11-28T10:00:00Z',
+        updated_at: '2025-11-28T10:00:00Z',
+      },
+    });
+
+    const sleep = vi.fn(async () => {
+      await writeRegistry(codexRoot, {
+        'thread-new': {
+          thread_id: 'thread-new',
+          role: 'engineer',
+          policy: 'workspace-write',
+          status: 'completed',
+          updated_at: '2025-11-28T10:01:00Z',
+          controller_id: 'controller-one',
+          label: 'live-node-app',
+          launch_id: 'launch-1',
+        },
+      });
+      await writeLaunches(codexRoot, {}); // launch resolved
+      return true;
+    });
+
+    const now = vi.fn();
+    now.mockReturnValueOnce(0);
+    now.mockReturnValue(5_000);
+
+    const { stdout, output } = captureOutput();
+    await waitCommand({
+      rootDir: codexRoot,
+      controllerId: 'controller-one',
+      includeAll: true,
+      intervalMs: 100,
+      timeoutMs: 10_000,
+      sleep,
+      now,
+      stdout,
+    });
+
+    const text = output.join('');
+    expect(text).toContain('thread-new');
+    expect(text).toContain('All threads stopped');
+    expect(sleep).toHaveBeenCalled();
   });
 });
