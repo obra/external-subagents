@@ -17,25 +17,34 @@ Use this skill any time the main Codex session might benefit from parallel or lo
 | Hard to remember what a subagent already answered | `peek`/`log` read NDJSON logs safely. |
 | Multiple Codex tabs open | Controller IDs keep each set of threads isolated (use `--controller-id` when intentionally sharing). |
 
+### Best Practices
+- **Always encode the workspace path in the prompt file.** Start each prompt with something like “Work inside `/Users/jesse/.../repo`; run all commands there” so the helper doesn’t guess (or touch the wrong repo).
+- **Default to `peek`.** Use `peek` for “what’s new?” checks and reserve `watch --duration-ms …` for short-lived polls. It keeps the main session quiet and avoids giant NDJSON dumps.
+- **Detach unless you absolutely need streaming.** `start`/`send` default to background mode so you can keep working; add `--wait` only when you need live streaming.
+
 ## Workflow (Do This Every Time)
-1. **Prep prompt**: Write the request to a prompt file (`task.txt`, `followup.txt`). Never inline multi-line prompts; this avoids shell quoting issues and leaves an audit trail.
+1. **Prep prompt**: Write the request to a prompt file (`task.txt`, `followup.txt`). Never inline multi-line prompts; this avoids shell quoting issues and leaves an audit trail. **Always include the repo/workdir instructions** (e.g., “Work inside `/path/to/repo`”) so the helper never guesses.
 2. **Launch**: `~/.codex/skills/using-subagents-as-codex/codex-subagent start --role <role> --policy workspace-write --prompt-file task.txt [--output-last last.txt] [--controller-id my-session] [--wait]`. Detached mode is the default—Codex keeps running for minutes/hours while the CLI returns immediately. Add `--wait` only when you need to sit in the session until Codex finishes.
-3. **Inspect**: Use `peek --thread <id> [--output-last last.txt]` to fetch the newest unseen assistant message without resuming; it updates `last_pulled_id` so repeated peeks are quiet when nothing changed.
-4. **Resume**: When you have follow-up instructions, `send --thread <id> --prompt-file followup.txt [...]`. Policy/role come from the registry; you only supply the new prompt file.
-5. **Review history**: `log --thread <id> [--tail 20] [--raw]` prints NDJSON history; grep/pipe as needed.
-6. **Watch if needed**: For “any updates yet?” loops, run `watch --thread <id> [--interval-ms 5000] [--controller-id ...]`. It repeatedly runs `peek`; stop with Ctrl+C (or wrap in `timeout` during demos).
-7. **Record outcomes**: After each peek/log/watch, paste the relevant sentence back into your main Codex convo so teammates know the status.
-8. **Demo sanity check**: On new machines, run `npm run demo` once to ensure `start` + `watch` wiring works locally.
+3. **Inspect**: Use `peek --thread <id> [--output-last last.txt]` to fetch the newest unseen assistant message without resuming; it updates `last_pulled_id` so repeated peeks are quiet when nothing changed. This is your default “what happened?” command—reach for `watch` only when you really need repeated polling.
+4. **Resume**: When you have follow-up instructions, `send --thread <id> --prompt-file followup.txt [--cwd /repo/path] [--wait]`. Policy/role come from the registry; you only supply the new prompt file, and `--wait` is optional when you want to block until the resumed turn completes (otherwise it detaches like `start`).
+5. **Request code review**: When dispatching review subagents, explicitly say “Use the template from requesting-code-review/code-reviewer.md; the code-reviewer skill isn’t installed here.” That keeps reviewers from trying `use-skill code-reviewer` and ensures they follow the right template.
+6. **Review history**: `log --thread <id> [--tail 20] [--raw]` prints NDJSON history; grep/pipe as needed. Add `--verbose` when you want the “last activity …” summary even if nothing new printed.
+7. **Watch if needed**: For “any updates yet?” loops, run `watch --thread <id> [--interval-ms 5000] [--duration-ms 60000] [--controller-id ...]`. It repeatedly runs `peek`; stop with Ctrl+C or let `--duration-ms` stop it automatically during demos.
+8. **Record outcomes**: After each peek/log/watch, paste the relevant sentence back into your main Codex convo so teammates know the status.
+9. **Demo sanity check**: On new machines, run `npm run demo` once to ensure `start` + `watch` wiring works locally.
 
 ## Quick Reference
 | Command | Required | Optional | Notes |
 | --- | --- | --- | --- |
-| `start` | `--role`, `--policy`, `--prompt-file` | `--output-last`, `--controller-id`, `--root` | Launches new thread; refuses “allow everything”. |
-| `send` | `--thread`, `--prompt-file` | `--output-last`, `--controller-id` | Resumes existing thread with new prompt file. |
-| `peek` | `--thread` | `--output-last`, `--controller-id` | Reads newest unseen assistant message only. |
-| `log` | `--thread` | `--tail <n>`, `--raw`, `--controller-id` | Reads stored NDJSON history. |
-| `watch` | `--thread` | `--interval-ms`, `--output-last`, `--controller-id` | Loops `peek` until stopped. |
-| `list` | *(none)* | `--controller-id`, `--root` | Shows threads owned by current controller. |
+| `start` | `--role`, `--policy`, `--prompt-file` | `--output-last`, `--controller-id`, `--root`, `--cwd`, `--label`, `--persona` | Launches new thread; refuses “allow everything”. `--cwd` prepends a “work inside …” instruction; `--label` + `--persona` add friendlier metadata. |
+| `send` | `--thread`, `--prompt-file` | `--output-last`, `--controller-id`, `--wait`, `--cwd`, `--persona` | Resumes existing thread; detached by default, add `--wait` to block. Missing `--persona` means “reuse whatever the thread already had.” |
+| `peek` | `--thread` | `--output-last`, `--controller-id`, `--verbose` | Reads newest unseen assistant message only. |
+| `log` | `--thread` | `--tail <n>`, `--raw`, `--controller-id`, `--verbose` | Reads stored NDJSON history, optionally appending “last activity …”. |
+| `status` | `--thread` | `--tail`, `--raw`, `--stale-minutes` | One-shot summary (latest turn, idle duration, follow-up suggestion). |
+| `watch` | `--thread` | `--interval-ms`, `--output-last`, `--duration-ms`, `--controller-id` | Loops `peek` until stopped (or until `--duration-ms` elapses). |
+| `label` | `--thread`, `--label` | `--controller-id` | Attaches/updates a friendly label (empty string clears it). |
+| `archive` | *(none)* | `--thread`, `--completed`, `--yes`, `--dry-run`, `--controller-id` | Moves completed threads + logs under `.codex-subagent/archive/…`. |
+| `list` | *(none)* | `--controller-id`, `--root` | Shows threads owned by current controller (running threads first, relative timestamps). |
 
 ## Common Mistakes + Fixes
 | Mistake | Fix |
@@ -43,7 +52,7 @@ Use this skill any time the main Codex session might benefit from parallel or lo
 | Forgetting to write prompt to disk | Create `task.txt` *first*, then run CLI; version control it if helpful. |
 | Expecting `peek` to resume Codex | `peek`/`log` are read-only; run `send` for actual execution. |
 | Multiple Codex terminals stepping on each other | Use distinct `--controller-id` values when you intentionally want to separate/merge thread pools. |
-| Leaving `watch` running | Use `Ctrl+C` or wrap `timeout 30 node ... watch ...` during tests. |
+| Leaving `watch` running | Use `Ctrl+C`, `--duration-ms`, or wrap `timeout 30 node ... watch ...` during tests. |
 | Committing `.codex-subagent` | Leave it ignored unless sharing sample logs on purpose. |
 
 ## Verification Snapshot
@@ -51,8 +60,9 @@ Baseline testing showed agents launching subagents inline (prompt strings) and f
 
 ## Checklist
 - [ ] Prompt written to disk before CLI call.
-- [ ] `start` executed with correct role/policy and (if needed) `--controller-id`.
-- [ ] `send` only after `peek/log` confirms prior output.
-- [ ] `peek`/`log` run before summarizing results back to main chat.
-- [ ] `watch` stopped with Ctrl+C or timeout.
+- [ ] `start` executed with correct role/policy and (if needed) `--controller-id` / `--persona`.
+- [ ] `send` only after `peek/log/status` confirms prior output.
+- [ ] `peek`/`log` (or `status`) run before summarizing results back to main chat.
+- [ ] `watch` stopped with Ctrl+C, `--duration-ms`, or timeout.
+- [ ] Completed threads archived (or intentionally retained) so the registry stays lean.
 - [ ] `.codex-subagent` left untracked unless intentionally shared.
