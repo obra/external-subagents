@@ -8,13 +8,16 @@ import { runSendThreadWorkflow } from '../lib/send-thread.ts';
 export interface SendCommandOptions {
   rootDir?: string;
   threadId: string;
-  promptFile: string;
+  promptFile?: string;
+  promptBody?: string;
   outputLastPath?: string;
   stdout?: Writable;
   controllerId: string;
   wait?: boolean;
   workingDir?: string;
   personaName?: string;
+  printPrompt?: boolean;
+  dryRun?: boolean;
 }
 
 const WORKER_SCRIPT = path.join(
@@ -26,22 +29,31 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
   if (!options.threadId) {
     throw new Error('send command requires --thread');
   }
-  if (!options.promptFile) {
-    throw new Error('send command requires --prompt-file');
+  if (!options.promptFile && !options.promptBody) {
+    throw new Error('send command requires prompt content (--prompt-file or --json).');
   }
 
   const stdout = options.stdout ?? process.stdout;
-  if (options.wait) {
+  const runInline = options.wait || options.printPrompt || options.dryRun;
+  if (runInline) {
     await runSendThreadWorkflow({
       rootDir: options.rootDir,
       threadId: options.threadId,
-      promptFile: path.resolve(options.promptFile),
+      promptFile: options.promptFile ? path.resolve(options.promptFile) : undefined,
+      promptBody: options.promptBody,
       outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
       controllerId: options.controllerId,
       workingDir: options.workingDir ? path.resolve(options.workingDir) : undefined,
       personaName: options.personaName,
+      printPrompt: Boolean(options.printPrompt),
+      dryRun: Boolean(options.dryRun),
+      stdout,
     });
-    stdout.write(`Sent prompt to thread ${options.threadId}\n`);
+    if (options.dryRun) {
+      stdout.write('Dry run: prompt not sent.\n');
+    } else {
+      stdout.write(`Sent prompt to thread ${options.threadId}\n`);
+    }
     return;
   }
 
@@ -55,7 +67,8 @@ function launchDetachedSendWorker(options: SendCommandOptions): void {
   const payloadData = {
     rootDir: options.rootDir ? path.resolve(options.rootDir) : undefined,
     threadId: options.threadId,
-    promptFile: path.resolve(options.promptFile),
+    promptFile: options.promptFile ? path.resolve(options.promptFile) : undefined,
+    promptBody: options.promptBody ?? undefined,
     outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
     controllerId: options.controllerId,
     workingDir: options.workingDir ? path.resolve(options.workingDir) : undefined,

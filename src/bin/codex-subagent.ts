@@ -69,6 +69,10 @@ interface StartFlags {
   persona?: string;
   manifestPath?: string;
   manifestFromStdin?: boolean;
+  jsonSource?: string;
+  jsonFromStdin?: boolean;
+  printPrompt?: boolean;
+  dryRun?: boolean;
 }
 
 function parseStartFlags(args: string[]): StartFlags {
@@ -126,6 +130,18 @@ function parseStartFlags(args: string[]): StartFlags {
         flags.persona = next;
         i++;
         break;
+      case '--json':
+        if (!next) {
+          throw new Error('--json flag requires a path or "-" for stdin');
+        }
+        flags.jsonSource = next === '-' ? '-' : path.resolve(next);
+        flags.jsonFromStdin = next === '-';
+        i++;
+        break;
+      case '--json-stdin':
+        flags.jsonSource = '-';
+        flags.jsonFromStdin = true;
+        break;
       case '--manifest':
         if (!next) {
           throw new Error('--manifest flag requires a path');
@@ -135,6 +151,12 @@ function parseStartFlags(args: string[]): StartFlags {
         break;
       case '--manifest-stdin':
         flags.manifestFromStdin = true;
+        break;
+      case '--print-prompt':
+        flags.printPrompt = true;
+        break;
+      case '--dry-run':
+        flags.dryRun = true;
         break;
       case '--wait':
         flags.wait = true;
@@ -184,6 +206,159 @@ function readStdin(): Promise<string> {
   });
 }
 
+interface StartJsonPayload {
+  promptBody?: string;
+  promptFile?: string;
+  role?: string;
+  policy?: string;
+  workingDir?: string;
+  label?: string;
+  persona?: string;
+  outputLastPath?: string;
+  wait?: boolean;
+}
+
+async function loadStartJsonPayload(
+  flags: StartFlags
+): Promise<{ manifest?: StartManifest; single?: StartJsonPayload }> {
+  if (!flags.jsonSource) {
+    return {};
+  }
+
+  const body = flags.jsonFromStdin
+    ? await readStdin()
+    : await readFile(flags.jsonSource, 'utf8');
+  if (!body.trim()) {
+    throw new Error('JSON prompt payload was empty.');
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch (error) {
+    throw new Error(
+      `Failed to parse JSON prompt payload: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  const sourceLabel = flags.jsonFromStdin ? 'stdin' : flags.jsonSource ?? 'json';
+  const baseDir = flags.jsonFromStdin || !flags.jsonSource ? process.cwd() : path.dirname(flags.jsonSource);
+
+  if (
+    Array.isArray(parsed) ||
+    (parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).tasks as unknown[]))
+  ) {
+    return { manifest: parseStartManifest(parsed, sourceLabel) };
+  }
+
+  return { single: normalizeStartJsonPayload(parsed, sourceLabel, baseDir) };
+}
+
+function normalizeStartJsonPayload(
+  data: unknown,
+  source: string,
+  baseDir: string
+): StartJsonPayload {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(`Start JSON payload from ${source} must be an object.`);
+  }
+  const record = data as Record<string, unknown>;
+  const pickString = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value;
+      }
+    }
+    return undefined;
+  };
+
+  return {
+    promptBody: pickString('prompt'),
+    promptFile: resolveMaybePath(pickString('promptFile', 'prompt_file'), baseDir),
+    role: pickString('role'),
+    policy: pickString('policy'),
+    workingDir: resolveMaybePath(pickString('cwd'), baseDir),
+    label: pickString('label'),
+    persona: pickString('persona'),
+    outputLastPath: resolveMaybePath(pickString('outputLast', 'output_last'), baseDir),
+    wait: typeof record.wait === 'boolean' ? record.wait : undefined,
+  };
+}
+
+function resolveMaybePath(value: string | undefined, baseDir: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+  return path.resolve(baseDir, value);
+}
+
+interface SendJsonPayload {
+  promptBody?: string;
+  promptFile?: string;
+  workingDir?: string;
+  persona?: string;
+  outputLastPath?: string;
+  wait?: boolean;
+}
+
+async function loadSendJsonPayload(flags: SendFlags): Promise<SendJsonPayload | undefined> {
+  if (!flags.jsonSource) {
+    return undefined;
+  }
+
+  const body = flags.jsonFromStdin
+    ? await readStdin()
+    : await readFile(flags.jsonSource, 'utf8');
+  if (!body.trim()) {
+    throw new Error('Send JSON payload was empty.');
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch (error) {
+    throw new Error(
+      `Failed to parse JSON payload: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  const baseDir = flags.jsonFromStdin || !flags.jsonSource ? process.cwd() : path.dirname(flags.jsonSource);
+  return normalizeSendJsonPayload(parsed, flags.jsonFromStdin ? 'stdin' : flags.jsonSource ?? 'json', baseDir);
+}
+
+function normalizeSendJsonPayload(
+  data: unknown,
+  source: string,
+  baseDir: string
+): SendJsonPayload {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(`Send JSON payload from ${source} must be an object.`);
+  }
+  const record = data as Record<string, unknown>;
+  const pickString = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value;
+      }
+    }
+    return undefined;
+  };
+
+  return {
+    promptBody: pickString('prompt'),
+    promptFile: resolveMaybePath(pickString('promptFile', 'prompt_file'), baseDir),
+    workingDir: resolveMaybePath(pickString('cwd'), baseDir),
+    persona: pickString('persona'),
+    outputLastPath: resolveMaybePath(pickString('outputLast', 'output_last'), baseDir),
+    wait: typeof record.wait === 'boolean' ? record.wait : undefined,
+  };
+}
+
 interface SendFlags {
   threadId?: string;
   promptFile?: string;
@@ -191,6 +366,10 @@ interface SendFlags {
   wait?: boolean;
   workingDir?: string;
   persona?: string;
+  jsonSource?: string;
+  jsonFromStdin?: boolean;
+  printPrompt?: boolean;
+  dryRun?: boolean;
 }
 
 function parseSendFlags(args: string[]): SendFlags {
@@ -233,6 +412,24 @@ function parseSendFlags(args: string[]): SendFlags {
         }
         flags.persona = next;
         i++;
+        break;
+      case '--json':
+        if (!next) {
+          throw new Error('--json flag requires a path or "-" for stdin');
+        }
+        flags.jsonSource = next === '-' ? '-' : path.resolve(next);
+        flags.jsonFromStdin = next === '-';
+        i++;
+        break;
+      case '--json-stdin':
+        flags.jsonSource = '-';
+        flags.jsonFromStdin = true;
+        break;
+      case '--print-prompt':
+        flags.printPrompt = true;
+        break;
+      case '--dry-run':
+        flags.dryRun = true;
         break;
       case '--wait':
         flags.wait = true;
@@ -677,18 +874,47 @@ async function run(): Promise<void> {
         if (flags.manifestPath || flags.manifestFromStdin) {
           manifest = await loadManifestFromFlags(flags);
         }
+        const { manifest: jsonManifest, single: jsonSingle } = await loadStartJsonPayload(flags);
+        if (jsonManifest) {
+          if (manifest) {
+            throw new Error('Cannot combine --manifest with a JSON manifest payload.');
+          }
+          manifest = jsonManifest;
+        }
+        if (manifest) {
+          if (flags.printPrompt || flags.dryRun) {
+            throw new Error('--print-prompt/--dry-run are not supported with manifest mode yet.');
+          }
+          await startCommand({
+            rootDir,
+            controllerId,
+            manifest,
+          });
+          break;
+        }
+        const resolvedRole = jsonSingle?.role ?? flags.role ?? '';
+        const resolvedPolicy = jsonSingle?.policy ?? flags.policy ?? '';
+        const resolvedPromptFile = jsonSingle?.promptFile ?? flags.promptFile;
+        const resolvedPromptBody = jsonSingle?.promptBody;
+        const resolvedWorkingDir = jsonSingle?.workingDir ?? flags.workingDir;
+        const resolvedLabel = jsonSingle?.label ?? flags.label;
+        const resolvedPersona = jsonSingle?.persona ?? flags.persona;
+        const resolvedOutputLast = jsonSingle?.outputLastPath ?? flags.outputLastPath;
+        const resolvedWait = jsonSingle?.wait ?? Boolean(flags.wait);
         await startCommand({
           rootDir,
-          role: flags.role,
-          policy: flags.policy,
-          promptFile: flags.promptFile,
-          outputLastPath: flags.outputLastPath,
-          wait: Boolean(flags.wait),
+          role: resolvedRole,
+          policy: resolvedPolicy,
+          promptFile: resolvedPromptFile,
+          promptBody: resolvedPromptBody,
+          outputLastPath: resolvedOutputLast,
+          wait: resolvedWait,
           controllerId,
-          workingDir: flags.workingDir,
-          label: flags.label,
-          personaName: flags.persona,
-          manifest,
+          workingDir: resolvedWorkingDir,
+          label: resolvedLabel,
+          personaName: resolvedPersona,
+          printPrompt: Boolean(flags.printPrompt),
+          dryRun: Boolean(flags.dryRun),
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -698,15 +924,25 @@ async function run(): Promise<void> {
     case 'send':
       try {
         const flags = parseSendFlags(rest);
+        const jsonPayload = await loadSendJsonPayload(flags);
+        const resolvedPromptFile = jsonPayload?.promptFile ?? flags.promptFile;
+        const resolvedPromptBody = jsonPayload?.promptBody;
+        const resolvedWorkingDir = jsonPayload?.workingDir ?? flags.workingDir;
+        const resolvedPersona = jsonPayload?.persona ?? flags.persona;
+        const resolvedOutputLast = jsonPayload?.outputLastPath ?? flags.outputLastPath;
+        const resolvedWait = jsonPayload?.wait ?? Boolean(flags.wait);
         await sendCommand({
           rootDir,
           threadId: flags.threadId ?? '',
-          promptFile: flags.promptFile ?? '',
-          outputLastPath: flags.outputLastPath,
+          promptFile: resolvedPromptFile,
+          promptBody: resolvedPromptBody,
+          outputLastPath: resolvedOutputLast,
           controllerId,
-          wait: Boolean(flags.wait),
-          workingDir: flags.workingDir,
-          personaName: flags.persona,
+          wait: resolvedWait,
+          workingDir: resolvedWorkingDir,
+          personaName: resolvedPersona,
+          printPrompt: Boolean(flags.printPrompt),
+          dryRun: Boolean(flags.dryRun),
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

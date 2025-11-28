@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { Writable } from 'node:stream';
 import { Paths } from './paths.ts';
 import { Registry } from './registry.ts';
 import { appendMessages } from './logs.ts';
@@ -11,12 +13,16 @@ import { loadPersonaRuntime, PersonaRuntime } from './personas.ts';
 export interface SendThreadWorkflowOptions {
   rootDir?: string;
   threadId: string;
-  promptFile: string;
+  promptFile?: string;
+  promptBody?: string;
   outputLastPath?: string;
   controllerId: string;
   workingDir?: string;
   personaName?: string;
   persona?: PersonaRuntime;
+  printPrompt?: boolean;
+  dryRun?: boolean;
+  stdout?: Writable;
 }
 
 function ensureThreadMetadata(
@@ -59,8 +65,30 @@ export async function runSendThreadWorkflow(
   const transformPrompt = (body: string) =>
     composePrompt(body, { workingDir: options.workingDir, persona });
 
+  const stdout = options.stdout ?? process.stdout;
+  let inlinePrompt = options.promptBody;
+  const promptFile = options.promptFile ? path.resolve(options.promptFile) : undefined;
+
+  if (!inlinePrompt && !promptFile) {
+    throw new Error('send command requires prompt content (file or inline).');
+  }
+
+  if ((options.printPrompt || options.dryRun) && !inlinePrompt && promptFile) {
+    inlinePrompt = await readFile(promptFile, 'utf8');
+  }
+
+  if (options.printPrompt || options.dryRun) {
+    const preview = transformPrompt(inlinePrompt ?? '');
+    stdout.write(`${preview}\n`);
+    if (options.dryRun) {
+      stdout.write('Dry run: Codex exec not started.\n');
+      return { threadId: options.threadId };
+    }
+  }
+
   const execResult = await runExec({
-    promptFile: path.resolve(options.promptFile),
+    promptBody: inlinePrompt ?? undefined,
+    promptFile: inlinePrompt ? undefined : promptFile!,
     outputLastPath: options.outputLastPath
       ? path.resolve(options.outputLastPath)
       : undefined,

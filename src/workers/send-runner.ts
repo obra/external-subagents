@@ -17,7 +17,14 @@ function parsePayload(): Record<string, unknown> {
     await runSendThreadWorkflow({
       rootDir: typeof payload.rootDir === 'string' ? payload.rootDir : undefined,
       threadId: String(payload.threadId),
-      promptFile: String(payload.promptFile),
+      promptFile:
+        typeof payload.promptFile === 'string' && payload.promptFile.length > 0
+          ? payload.promptFile
+          : undefined,
+      promptBody:
+        typeof payload.promptBody === 'string' && payload.promptBody.length > 0
+          ? payload.promptBody
+          : undefined,
       outputLastPath:
         typeof payload.outputLastPath === 'string' ? payload.outputLastPath : undefined,
       controllerId: String(payload.controllerId),

@@ -3,9 +3,11 @@ import { Writable } from 'node:stream';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import { runStartThreadWorkflow } from '../lib/start-thread.ts';
 import { loadPersonaRuntime, mapModelAliasToPolicy, PersonaRuntime } from '../lib/personas.ts';
 import { StartManifest } from '../lib/start-manifest.ts';
+import { composePrompt } from '../lib/prompt.ts';
 
 export interface StartCommandOptions {
   rootDir?: string;
@@ -21,6 +23,8 @@ export interface StartCommandOptions {
   workingDir?: string;
   label?: string;
   personaName?: string;
+  printPrompt?: boolean;
+  dryRun?: boolean;
 }
 
 interface ResolvedManifestTask {
@@ -86,13 +90,34 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     : undefined;
   const resolvedPolicy = applyPersonaPolicy(policy, persona);
 
+  const promptFile = prompt.promptFile;
+  let promptBody = prompt.promptBody;
+
+  if (options.printPrompt || options.dryRun) {
+    if (!promptBody && !promptFile) {
+      throw new Error('start command requires prompt content before printing.');
+    }
+    if (!promptBody && promptFile) {
+      promptBody = await readFile(promptFile, 'utf8');
+    }
+    const preview = composePrompt(promptBody ?? '', {
+      workingDir: options.workingDir,
+      persona,
+    });
+    stdout.write(`${preview}\n`);
+    if (options.dryRun) {
+      stdout.write('Dry run: Codex exec not started.\n');
+      return undefined;
+    }
+  }
+
   if (options.wait) {
     const result = await runStartThreadWorkflow({
       rootDir: options.rootDir,
       role,
       policy: resolvedPolicy,
-      promptFile: prompt.promptFile,
-      promptBody: prompt.promptBody,
+      promptFile: promptBody ? undefined : promptFile,
+      promptBody,
       outputLastPath: options.outputLastPath,
       controllerId: options.controllerId,
       workingDir: options.workingDir,
@@ -107,8 +132,8 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     rootDir: options.rootDir,
     role,
     policy: resolvedPolicy,
-    promptFile: prompt.promptFile,
-    promptBody: prompt.promptBody,
+    promptFile: promptBody ? undefined : promptFile,
+    promptBody,
     outputLastPath: options.outputLastPath,
     controllerId: options.controllerId,
     workingDir: options.workingDir,

@@ -229,6 +229,67 @@ describe('send command', () => {
     expect(sample).toContain('Original prompt');
   });
 
+  it('supports inline prompt bodies when waiting', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-send-inline-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+    const paths = new Paths(codexRoot);
+    await paths.ensure();
+    const registry = new Registry(paths);
+    await registry.upsert({
+      thread_id: 'thread-123',
+      role: 'researcher',
+      policy: 'workspace-write',
+      controller_id: 'controller-one',
+    });
+
+    const fixture = await loadFixture();
+    vi.mocked(runExec).mockResolvedValueOnce(fixture);
+
+    await sendCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      promptBody: 'Inline resume prompt.',
+      controllerId: 'controller-one',
+      wait: true,
+    });
+
+    expect(runExec).toHaveBeenCalledWith(
+      expect.objectContaining({ promptBody: 'Inline resume prompt.', promptFile: undefined })
+    );
+  });
+
+  it('prints prompt preview and stops on dry run', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-send-dry-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+    const paths = new Paths(codexRoot);
+    await paths.ensure();
+    const registry = new Registry(paths);
+    await registry.upsert({
+      thread_id: 'thread-123',
+      role: 'researcher',
+      policy: 'workspace-write',
+      controller_id: 'controller-one',
+    });
+    const promptFile = path.join(root, 'prompt.txt');
+    await writeFile(promptFile, 'Dry run prompt');
+
+    const { stdout, output } = captureOutput();
+    await sendCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      promptFile,
+      controllerId: 'controller-one',
+      dryRun: true,
+      printPrompt: true,
+      stdout,
+    });
+
+    expect(runExec).not.toHaveBeenCalled();
+    expect(spawnMock).not.toHaveBeenCalled();
+    const text = output.join('');
+    expect(text).toContain('Dry run: prompt not sent.');
+  });
+
   it('reuses stored persona prompts when resuming', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-send-persona-'));
     const codexRoot = path.join(root, '.codex-subagent');

@@ -12,11 +12,12 @@ Install (or reinstall) via `npm install --prefix ~/.codex/skills/using-subagents
   --prompt-file task.txt [--cwd /path/to/repo] [--persona code-reviewer] [--label "Task Name"] \
   [--output-last last.txt] [--controller-id demo-doc] [--wait]
 ```
-- Write prompts to files to avoid shell quoting issues.
+- Write prompts to files to avoid shell quoting issues, or feed structured JSON via `--json prompt.json` / `--json -` (stdin) with keys such as `prompt`, `role`, `policy`, `cwd`, `label`, `persona`, `output_last`, and `wait`.
 - `workspace-write` is the recommended policy; custom policy names only work if you have matching Codex profiles configured. When you pass `--persona`, the persona’s `model` field remaps the sandbox (e.g., `haiku` → `read-only`, `sonnet` → `workspace-write`).
 - **Detached by default:** without `--wait`, `start` spawns a background Codex process and returns immediately. Long-running tasks may take minutes or hours; use `peek`/`log` later to inspect results, or add `--wait` when you need to stream the entire run inline.
 - A new thread entry is persisted under `.codex-subagent/state/threads.json`, with NDJSON logs under `.codex-subagent/logs/<thread>.ndjson`.
 - Personas live (in priority order) under `.codex/agents/` in the project, `~/.codex/agents/`, and the superpowers `agents/` directory. Their prompts and referenced skills are injected automatically, and the persona name is stored with the thread.
+- `--print-prompt` echoes the fully composed prompt (persona instructions + working directory reminder) before Codex runs; pair it with `--dry-run` to stop after printing when you just want to inspect the text.
 
 ### Launch a batch with `start --manifest`
 
@@ -56,7 +57,7 @@ codex-subagent send --thread <thread_id> --prompt-file followup.txt \
   [--cwd /path/to/repo] [--persona code-reviewer] [--output-last last.txt] [--wait]
 ```
 
-`send` shells out to `codex exec resume …`, appends the streamed JSONL to the log, and updates the registry (status, `last_message_id`). Detached mode lets the main session keep working while Codex runs; pass `--wait` when you need to sit in the turn until it finishes. `--cwd` prepends a “work inside …” instruction so reviewers/helpers never guess the repo path.
+`send` shells out to `codex exec resume …`, appends the streamed JSONL to the log, and updates the registry (status, `last_message_id`). Detached mode lets the main session keep working while Codex runs; pass `--wait` when you need to sit in the turn until it finishes. `--cwd` prepends a “work inside …” instruction so reviewers/helpers never guess the repo path. You can also pass `--json followup.json` (or stdin) instead of `--prompt-file` for single-shot resumes, and use `--print-prompt`/`--dry-run` just like `start` when you want to audit the composed message.
 
 ## 3. Check Results Without Resuming
 

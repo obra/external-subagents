@@ -183,6 +183,57 @@ describe('start command', () => {
     expect(sample).toContain('Investigate.');
   });
 
+  it('accepts inline prompt body when waiting', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-start-inline-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+
+    const fixture = await loadFixture();
+    vi.mocked(runExec).mockResolvedValueOnce(fixture);
+
+    await startCommand({
+      rootDir: codexRoot,
+      role: 'researcher',
+      policy: 'workspace-write',
+      promptBody: 'Inline instructions here.',
+      controllerId: 'controller-inline',
+      wait: true,
+    });
+
+    expect(runExec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promptBody: 'Inline instructions here.',
+        promptFile: undefined,
+      })
+    );
+  });
+
+  it('prints prompt preview and exits on dry run', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-start-dry-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+    const promptFile = path.join(root, 'prompt.txt');
+    await writeFile(promptFile, 'Dry run body');
+
+    const { stdout, output } = captureOutput();
+    await startCommand({
+      rootDir: codexRoot,
+      role: 'researcher',
+      policy: 'workspace-write',
+      promptFile,
+      controllerId: 'controller-dry',
+      wait: true,
+      workingDir: '/tmp/dry-repo',
+      printPrompt: true,
+      dryRun: true,
+      stdout,
+    });
+
+    expect(runExec).not.toHaveBeenCalled();
+    expect(spawnMock).not.toHaveBeenCalled();
+    const text = output.join('');
+    expect(text).toContain('/tmp/dry-repo');
+    expect(text).toContain('Dry run: Codex exec not started.');
+  });
+
   it('applies persona prompt, skills, and model mapping', async () => {
     const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-start-persona-'));
     const codexRoot = path.join(projectRoot, '.codex-subagent');
