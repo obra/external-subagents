@@ -4,6 +4,8 @@ import { resolvePolicy } from './policy.ts';
 import { runExec } from './exec-runner.ts';
 import { Registry } from './registry.ts';
 import { appendMessages } from './logs.ts';
+import { composePrompt } from './prompt.ts';
+import type { PersonaRuntime } from './personas.ts';
 
 export interface StartThreadWorkflowOptions {
   rootDir?: string;
@@ -12,6 +14,9 @@ export interface StartThreadWorkflowOptions {
   promptFile: string;
   outputLastPath?: string;
   controllerId: string;
+  workingDir?: string;
+  label?: string;
+  persona?: PersonaRuntime;
 }
 
 export interface StartThreadWorkflowResult {
@@ -25,9 +30,12 @@ export async function runStartThreadWorkflow(
   await paths.ensure();
 
   const policyConfig = resolvePolicy(options.policy);
+  const transformPrompt = (body: string) =>
+    composePrompt(body, { workingDir: options.workingDir, persona: options.persona });
   const execResult = await runExec({
     promptFile: path.resolve(options.promptFile),
     outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
+    transformPrompt,
     ...policyConfig,
   });
 
@@ -39,6 +47,8 @@ export async function runStartThreadWorkflow(
     status: execResult.status ?? 'running',
     last_message_id: execResult.last_message_id,
     controller_id: options.controllerId,
+    label: options.label,
+    persona: options.persona?.name,
   });
 
   const logPath = paths.logFile(execResult.thread_id);

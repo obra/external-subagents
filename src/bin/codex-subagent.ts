@@ -63,6 +63,7 @@ interface StartFlags {
   wait?: boolean;
   workingDir?: string;
   label?: string;
+  persona?: string;
 }
 
 function parseStartFlags(args: string[]): StartFlags {
@@ -113,6 +114,13 @@ function parseStartFlags(args: string[]): StartFlags {
         flags.label = next;
         i++;
         break;
+      case '--persona':
+        if (!next) {
+          throw new Error('--persona flag requires a value');
+        }
+        flags.persona = next;
+        i++;
+        break;
       case '--wait':
         flags.wait = true;
         break;
@@ -129,6 +137,7 @@ interface SendFlags {
   outputLastPath?: string;
   wait?: boolean;
   workingDir?: string;
+  persona?: string;
 }
 
 function parseSendFlags(args: string[]): SendFlags {
@@ -163,6 +172,13 @@ function parseSendFlags(args: string[]): SendFlags {
           throw new Error('--cwd flag requires a path');
         }
         flags.workingDir = path.resolve(next);
+        i++;
+        break;
+      case '--persona':
+        if (!next) {
+          throw new Error('--persona flag requires a value');
+        }
+        flags.persona = next;
         i++;
         break;
       case '--wait':
@@ -451,12 +467,14 @@ function printHelp(): void {
   '    --output-last <path>  Optional file for last message text',
   '    --cwd <path>          Optional working directory instruction for the subagent',
   '    --label <text>        Optional friendly label stored with the thread',
+  '    --persona <name>      Optional persona to load from .codex/agents',
   '    --wait                Block until Codex finishes (default: detach)',
   '  send flags:',
   '    --thread <id>         Target thread to resume (required)',
   '    --prompt-file <path>  Prompt file for the next turn',
   '    --output-last <path>  Optional file for last message text',
   '    --cwd <path>          Optional working directory instruction for the subagent',
+  '    --persona <name>      Optional persona override for this turn',
   '    --wait                Block until Codex finishes (default: detach)',
   '  peek flags:',
   '    --thread <id>         Target thread to inspect (required)',
@@ -540,6 +558,7 @@ async function run(): Promise<void> {
           controllerId,
           workingDir: flags.workingDir,
           label: flags.label,
+          personaName: flags.persona,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -557,6 +576,7 @@ async function run(): Promise<void> {
           controllerId,
           wait: Boolean(flags.wait),
           workingDir: flags.workingDir,
+          personaName: flags.persona,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

@@ -1,10 +1,10 @@
 import process from 'node:process';
-import { runStartThreadWorkflow } from '../lib/start-thread.ts';
+import { runSendThreadWorkflow } from '../lib/send-thread.ts';
 
 function parsePayload(): Record<string, unknown> {
   const payloadFlagIndex = process.argv.indexOf('--payload');
   if (payloadFlagIndex === -1 || payloadFlagIndex === process.argv.length - 1) {
-    throw new Error('start-runner requires --payload <base64-json>');
+    throw new Error('send-runner requires --payload <base64-json>');
   }
   const base64 = process.argv[payloadFlagIndex + 1];
   const json = Buffer.from(base64, 'base64').toString('utf8');
@@ -14,22 +14,20 @@ function parsePayload(): Record<string, unknown> {
 (async () => {
   try {
     const payload = parsePayload();
-    await runStartThreadWorkflow({
+    await runSendThreadWorkflow({
       rootDir: typeof payload.rootDir === 'string' ? payload.rootDir : undefined,
-      role: String(payload.role),
-      policy: String(payload.policy),
+      threadId: String(payload.threadId),
       promptFile: String(payload.promptFile),
       outputLastPath:
         typeof payload.outputLastPath === 'string' ? payload.outputLastPath : undefined,
       controllerId: String(payload.controllerId),
       workingDir: typeof payload.workingDir === 'string' ? payload.workingDir : undefined,
-      label: typeof payload.label === 'string' ? payload.label : undefined,
-      persona:
-        payload.persona && typeof payload.persona === 'object' ? (payload.persona as any) : undefined,
+      personaName:
+        typeof payload.personaName === 'string' ? payload.personaName : undefined,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`Detached start failed: ${message}\n`);
+    process.stderr.write(`Detached send failed: ${message}\n`);
     process.exitCode = 1;
   }
 })();

@@ -30,6 +30,7 @@ export interface ExecOptions {
   extraArgs?: string[];
   sandbox?: string;
   profile?: string;
+  transformPrompt?: (body: string) => string;
 }
 
 function buildArgs(options: ExecOptions): string[] {
@@ -52,7 +53,10 @@ function buildArgs(options: ExecOptions): string[] {
 
 export async function runExec(options: ExecOptions): Promise<ExecResult> {
   const args = buildArgs(options);
-  const promptBody = await readFile(path.resolve(options.promptFile), 'utf8');
+  let promptBody = await readFile(path.resolve(options.promptFile), 'utf8');
+  if (options.transformPrompt) {
+    promptBody = options.transformPrompt(promptBody);
+  }
 
   let stdout: string;
   try {

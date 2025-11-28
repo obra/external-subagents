@@ -63,11 +63,13 @@ describe('start command', () => {
       wait: true,
     });
 
-    expect(runExec).toHaveBeenCalledWith({
-      promptFile: path.resolve(promptFile),
-      profile: 'research-readonly',
-      outputLastPath,
-    });
+    expect(runExec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promptFile: path.resolve(promptFile),
+        profile: 'research-readonly',
+        outputLastPath,
+      })
+    );
 
     const registryPath = path.join(codexRoot, 'state', 'threads.json');
     const registryRaw = await readFile(registryPath, 'utf8');
@@ -149,5 +151,80 @@ describe('start command', () => {
     const childProcess = spawnMock.mock.results[0]?.value;
     expect(childProcess?.unref).toBeDefined();
     expect(childProcess?.unref).toHaveBeenCalled();
+  });
+
+  it('augments prompts with working directory instructions when provided', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-start-cwd-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+    const promptFile = path.join(root, 'prompt.txt');
+    await writeFile(promptFile, 'Original prompt');
+
+    const fixture = await loadFixture();
+    vi.mocked(runExec).mockResolvedValueOnce(fixture);
+
+    await startCommand({
+      rootDir: codexRoot,
+      role: 'researcher',
+      policy: 'workspace-write',
+      promptFile,
+      controllerId: 'controller-test',
+      wait: true,
+      workingDir: '/tmp/demo-repo',
+    });
+
+    const callOptions = vi.mocked(runExec).mock.calls[0]?.[0];
+    expect(callOptions?.transformPrompt).toBeTypeOf('function');
+    const sample = callOptions.transformPrompt?.('Investigate.');
+    expect(sample).toContain('/tmp/demo-repo');
+    expect(sample).toContain('Investigate.');
+  });
+
+  it('applies persona prompt, skills, and model mapping', async () => {
+    const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-start-persona-'));
+    const codexRoot = path.join(projectRoot, '.codex-subagent');
+    const personaDir = path.join(projectRoot, '.codex', 'agents');
+    await mkdir(personaDir, { recursive: true });
+    const personaFile = path.join(personaDir, 'reviewer.md');
+    await writeFile(
+      personaFile,
+      `---\nname: reviewer\ndescription: Code reviewer\nmodel: haiku\nskills: skill-alpha\n---\nYou are Reviewer Persona.\n`
+    );
+
+    const tempHome = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-home-'));
+    const skillDir = path.join(tempHome, '.codex', 'skills', 'skill-alpha');
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(path.join(skillDir, 'SKILL.md'), '# Skill Alpha\nFollow these rules.');
+    const homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(tempHome);
+
+    const promptFile = path.join(projectRoot, 'prompt.txt');
+    await writeFile(promptFile, 'Persona prompt base.');
+
+    const fixture = await loadFixture();
+    vi.mocked(runExec).mockResolvedValueOnce(fixture);
+
+    await startCommand({
+      rootDir: codexRoot,
+      role: 'reviewer',
+      policy: 'workspace-write',
+      promptFile,
+      controllerId: 'controller-persona',
+      wait: true,
+      personaName: 'reviewer',
+    });
+
+    const callOptions = vi.mocked(runExec).mock.calls[0]?.[0];
+    expect(callOptions?.sandbox).toBe('read-only');
+    expect(callOptions?.transformPrompt).toBeTypeOf('function');
+    const sample = callOptions.transformPrompt?.('Investigate now.');
+    expect(sample).toContain('Reviewer Persona');
+    expect(sample).toContain('Skill skill-alpha');
+    expect(sample).toContain('Investigate now.');
+
+    const registryPath = path.join(codexRoot, 'state', 'threads.json');
+    const registry = JSON.parse(await readFile(registryPath, 'utf8'));
+    const thread = registry[fixture.thread_id];
+    expect(thread.persona).toBe('reviewer');
+
+    homedirSpy.mockRestore();
   });
 });
