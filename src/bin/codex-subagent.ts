@@ -1,5 +1,6 @@
 import process from 'node:process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { listCommand } from '../commands/list.ts';
 import { startCommand } from '../commands/start.ts';
@@ -14,6 +15,11 @@ import { waitCommand } from '../commands/wait.ts';
 import { RegistryLoadError } from '../lib/registry.ts';
 import { getControllerId } from '../lib/controller-id.ts';
 import { parseStartManifest, StartManifest } from '../lib/start-manifest.ts';
+import { runStartThreadWorkflow } from '../lib/start-thread.ts';
+import { runSendThreadWorkflow } from '../lib/send-thread.ts';
+import type { PersonaRuntime } from '../lib/personas.ts';
+
+const CLI_ENTRY_PATH = fileURLToPath(import.meta.url);
 
 interface ParsedArgs {
   command: string;
@@ -889,6 +895,7 @@ async function run(): Promise<void> {
             rootDir,
             controllerId,
             manifest,
+            cliPath: CLI_ENTRY_PATH,
           });
           break;
         }
@@ -915,6 +922,7 @@ async function run(): Promise<void> {
           personaName: resolvedPersona,
           printPrompt: Boolean(flags.printPrompt),
           dryRun: Boolean(flags.dryRun),
+          cliPath: CLI_ENTRY_PATH,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -943,9 +951,30 @@ async function run(): Promise<void> {
           personaName: resolvedPersona,
           printPrompt: Boolean(flags.printPrompt),
           dryRun: Boolean(flags.dryRun),
+          cliPath: CLI_ENTRY_PATH,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      break;
+    case 'worker-start':
+      try {
+        await runWorkerStart(rest);
+      } catch (error) {
+        process.stderr.write(
+          `Detached start failed: ${error instanceof Error ? error.message : String(error)}\n`
+        );
+        process.exitCode = 1;
+      }
+      break;
+    case 'worker-send':
+      try {
+        await runWorkerSend(rest);
+      } catch (error) {
+        process.stderr.write(
+          `Detached send failed: ${error instanceof Error ? error.message : String(error)}\n`
+        );
         process.exitCode = 1;
       }
       break;
@@ -1090,6 +1119,88 @@ async function run(): Promise<void> {
       printHelp();
       process.exitCode = 1;
   }
+}
+
+async function runWorkerStart(rest: string[]): Promise<void> {
+  const payload = decodeWorkerPayload(rest);
+  const role = asString(payload.role);
+  const policy = asString(payload.policy);
+  if (!role) {
+    throw new Error('worker payload missing role');
+  }
+  if (!policy) {
+    throw new Error('worker payload missing policy');
+  }
+
+  await runStartThreadWorkflow({
+    rootDir: asPath(payload.rootDir),
+    role,
+    policy,
+    promptFile: asPath(payload.promptFile),
+    promptBody: asString(payload.promptBody),
+    outputLastPath: asPath(payload.outputLastPath),
+    controllerId: asString(payload.controllerId) ?? '',
+    workingDir: asPath(payload.workingDir),
+    label: asString(payload.label),
+    persona: asPersonaRuntime(payload.persona),
+  });
+}
+
+async function runWorkerSend(rest: string[]): Promise<void> {
+  const payload = decodeWorkerPayload(rest);
+  const threadId = asString(payload.threadId);
+  if (!threadId) {
+    throw new Error('worker payload missing threadId');
+  }
+
+  await runSendThreadWorkflow({
+    rootDir: asPath(payload.rootDir),
+    threadId,
+    promptFile: asPath(payload.promptFile),
+    promptBody: asString(payload.promptBody),
+    outputLastPath: asPath(payload.outputLastPath),
+    controllerId: asString(payload.controllerId) ?? '',
+    workingDir: asPath(payload.workingDir),
+    personaName: asString(payload.personaName),
+  });
+}
+
+function decodeWorkerPayload(rest: string[]): Record<string, unknown> {
+  const payloadIndex = rest.indexOf('--payload');
+  if (payloadIndex === -1 || payloadIndex === rest.length - 1) {
+    throw new Error('worker command requires --payload <base64>');
+  }
+  const base64 = rest[payloadIndex + 1];
+  const json = Buffer.from(base64, 'base64').toString('utf8');
+  try {
+    const parsed = JSON.parse(json);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as Record<string, unknown>;
+    }
+  } catch (error) {
+    throw new Error(
+      `failed to parse worker payload JSON: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+  throw new Error('worker payload must decode to an object');
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function asPath(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined;
+  }
+  return path.resolve(value);
+}
+
+function asPersonaRuntime(value: unknown): PersonaRuntime | undefined {
+  if (value && typeof value === 'object') {
+    return value as PersonaRuntime;
+  }
+  return undefined;
 }
 
 run().catch((error) => {

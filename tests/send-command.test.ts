@@ -34,6 +34,8 @@ async function loadFixture() {
   return JSON.parse(raw);
 }
 
+const CLI_PATH = '/tmp/codex-subagent.mjs';
+
 describe('send command', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -75,6 +77,7 @@ describe('send command', () => {
       stdout,
       controllerId: 'controller-one',
       wait: true,
+      cliPath: CLI_PATH,
     });
 
     expect(runExec).toHaveBeenCalledWith(
@@ -112,6 +115,7 @@ describe('send command', () => {
         promptFile,
         controllerId: 'controller-one',
         wait: true,
+        cliPath: CLI_PATH,
       })
     ).rejects.toThrow('Thread not found');
   });
@@ -138,6 +142,7 @@ describe('send command', () => {
         promptFile,
         controllerId: 'controller-one',
         wait: true,
+        cliPath: CLI_PATH,
       })
     ).rejects.toThrow('Thread thread-123 belongs to a different controller');
   });
@@ -166,6 +171,7 @@ describe('send command', () => {
       promptFile,
       controllerId: 'controller-one',
       stdout,
+      cliPath: CLI_PATH,
     });
 
     expect(runExec).not.toHaveBeenCalled();
@@ -178,7 +184,10 @@ describe('send command', () => {
     });
 
     const spawnArgv = spawnArgs[1] as string[];
-    const payloadBase64 = spawnArgv[2];
+    expect(spawnArgv[0]).toBe(CLI_PATH);
+    expect(spawnArgv[1]).toBe('worker-send');
+    expect(spawnArgv[2]).toBe('--payload');
+    const payloadBase64 = spawnArgv[3];
     const payloadJson = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
     expect(payloadJson).toMatchObject({
       threadId: 'thread-123',
@@ -220,6 +229,7 @@ describe('send command', () => {
       controllerId: 'controller-one',
       wait: true,
       workingDir: '/tmp/demo-repo',
+      cliPath: CLI_PATH,
     });
 
     const callOptions = vi.mocked(runExec).mock.calls[0]?.[0];
@@ -251,6 +261,7 @@ describe('send command', () => {
       promptBody: 'Inline resume prompt.',
       controllerId: 'controller-one',
       wait: true,
+      cliPath: CLI_PATH,
     });
 
     expect(runExec).toHaveBeenCalledWith(
@@ -282,6 +293,7 @@ describe('send command', () => {
       dryRun: true,
       printPrompt: true,
       stdout,
+      cliPath: CLI_PATH,
     });
 
     expect(runExec).not.toHaveBeenCalled();
@@ -322,6 +334,7 @@ describe('send command', () => {
       promptFile,
       controllerId: 'controller-one',
       wait: true,
+      cliPath: CLI_PATH,
     });
 
     const callOptions = vi.mocked(runExec).mock.calls[0]?.[0];

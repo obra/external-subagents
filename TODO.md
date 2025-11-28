@@ -15,3 +15,5 @@
 - [x] Honor persona `skills` by auto-loading the referenced skill files before launching the subagent (if available locally), so personas can enforce their own workflows.
 - [x] Extend `help`/docs/skill sections to explain personas, `status`, and `archive`, including examples of using `--persona` together with `--cwd`, `--label`, etc.
 - [ ] Improve startup diagnostics so failed `start`/`send` attempts surface actionable errors (e.g., log runner stderr, show "NOT RUNNING" in `list`, and warn when a thread never progressed past launch).
+- [ ] Re-run the full Codex real-world test (with sandbox disabled) to confirm the new single-binary workflow writes `.codex-subagent/state/threads.json`, and capture the transcript for docs.
+- [ ] Document the hidden `worker-start` / `worker-send` subcommands in developer notes so future maintainers understand how detached launches re-enter the CLI.

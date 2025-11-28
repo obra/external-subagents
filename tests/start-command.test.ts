@@ -27,6 +27,8 @@ const execFixturePath = path.join(
   'exec-start.json'
 );
 
+const CLI_PATH = '/tmp/codex-subagent.mjs';
+
 async function loadFixture() {
   const raw = await readFile(execFixturePath, 'utf8');
   return JSON.parse(raw);
@@ -61,6 +63,7 @@ describe('start command', () => {
       stdout,
       controllerId: 'controller-test',
       wait: true,
+      cliPath: CLI_PATH,
     });
 
     expect(runExec).toHaveBeenCalledWith(
@@ -105,6 +108,7 @@ describe('start command', () => {
         promptFile,
         controllerId: 'controller-test',
         wait: true,
+        cliPath: CLI_PATH,
       })
     ).rejects.toThrow('exec failed');
 
@@ -125,6 +129,7 @@ describe('start command', () => {
       promptFile,
       controllerId: 'controller-detached',
       stdout,
+      cliPath: CLI_PATH,
     });
 
     expect(threadId).toBeUndefined();
@@ -139,7 +144,10 @@ describe('start command', () => {
     });
 
     const spawnArgv = spawnArgs[1] as string[];
-    const payloadBase64 = spawnArgv[2];
+    expect(spawnArgv[0]).toBe(CLI_PATH);
+    expect(spawnArgv[1]).toBe('worker-start');
+    expect(spawnArgv[2]).toBe('--payload');
+    const payloadBase64 = spawnArgv[3];
     const payloadJson = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
     expect(payloadJson).toMatchObject({
       role: 'analyst',
@@ -174,6 +182,7 @@ describe('start command', () => {
       controllerId: 'controller-test',
       wait: true,
       workingDir: '/tmp/demo-repo',
+      cliPath: CLI_PATH,
     });
 
     const callOptions = vi.mocked(runExec).mock.calls[0]?.[0];
@@ -197,6 +206,7 @@ describe('start command', () => {
       promptBody: 'Inline instructions here.',
       controllerId: 'controller-inline',
       wait: true,
+      cliPath: CLI_PATH,
     });
 
     expect(runExec).toHaveBeenCalledWith(
@@ -225,6 +235,7 @@ describe('start command', () => {
       printPrompt: true,
       dryRun: true,
       stdout,
+      cliPath: CLI_PATH,
     });
 
     expect(runExec).not.toHaveBeenCalled();
@@ -265,6 +276,7 @@ describe('start command', () => {
       controllerId: 'controller-persona',
       wait: true,
       personaName: 'reviewer',
+      cliPath: CLI_PATH,
     });
 
     const callOptions = vi.mocked(runExec).mock.calls[0]?.[0];
@@ -314,13 +326,17 @@ describe('start command', () => {
       manifest,
       role: 'researcher',
       policy: 'workspace-write',
+      cliPath: CLI_PATH,
       stdout,
     });
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
     const spawnArgs = (spawnMock.mock.calls[0] as unknown[]) ?? [];
     const manifestSpawnArgv = spawnArgs[1] as string[];
-    const payloadBase64 = manifestSpawnArgv[2];
+    expect(manifestSpawnArgv[0]).toBe(CLI_PATH);
+    expect(manifestSpawnArgv[1]).toBe('worker-start');
+    expect(manifestSpawnArgv[2]).toBe('--payload');
+    const payloadBase64 = manifestSpawnArgv[3];
     const payloadJson = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
     expect(payloadJson.promptBody).toBe('Detached prompt body');
     expect(payloadJson.label).toBe('Detached Task');
@@ -360,6 +376,7 @@ describe('start command', () => {
         manifest,
         role: 'researcher',
         policy: 'workspace-write',
+        cliPath: CLI_PATH,
       })
     ).rejects.toThrow(/manifest task 0/i);
   });

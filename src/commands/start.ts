@@ -25,6 +25,7 @@ export interface StartCommandOptions {
   personaName?: string;
   printPrompt?: boolean;
   dryRun?: boolean;
+  cliPath?: string;
 }
 
 interface ResolvedManifestTask {
@@ -45,11 +46,6 @@ interface ManifestResult {
   mode: 'waited' | 'detached';
   threadId?: string;
 }
-
-const WORKER_SCRIPT = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../start-runner.js'
-);
 
 export async function startCommand(options: StartCommandOptions): Promise<string | undefined> {
   const stdout = options.stdout ?? process.stdout;
@@ -139,6 +135,7 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     workingDir: options.workingDir,
     label: options.label,
     persona,
+    cliPath: options.cliPath,
   });
   stdout.write(
     'Subagent launched in the background; Codex may run for minutes or hours. Use `codex-subagent list`, `peek`, or `log` later to inspect results.\n'
@@ -209,6 +206,7 @@ async function runManifestStart(args: {
         workingDir: task.workingDir,
         label: task.label,
         persona,
+        cliPath: args.baseOptions.cliPath,
       });
       results.push({
         index,
@@ -338,9 +336,11 @@ interface DetachedWorkerOptions {
   workingDir?: string;
   label?: string;
   persona?: PersonaRuntime;
+  cliPath?: string;
 }
 
 function launchDetachedWorker(options: DetachedWorkerOptions): void {
+  const cliPath = resolveCliPath(options.cliPath);
   const payloadData = {
     rootDir: options.rootDir ? path.resolve(options.rootDir) : undefined,
     role: options.role,
@@ -355,11 +355,21 @@ function launchDetachedWorker(options: DetachedWorkerOptions): void {
   };
 
   const payload = Buffer.from(JSON.stringify(payloadData), 'utf8').toString('base64');
-  const child = spawn(process.execPath, [WORKER_SCRIPT, '--payload', payload], {
+  const child = spawn(process.execPath, [cliPath, 'worker-start', '--payload', payload], {
     detached: true,
     stdio: 'ignore',
   });
   child.unref();
+}
+
+function resolveCliPath(overridePath?: string): string {
+  if (overridePath) {
+    return path.resolve(overridePath);
+  }
+  if (process.argv[1]) {
+    return process.argv[1];
+  }
+  return fileURLToPath(new URL('../bin/codex-subagent.ts', import.meta.url));
 }
 
 function getProjectRoot(rootDir?: string): string {

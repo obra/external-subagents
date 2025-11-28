@@ -18,12 +18,8 @@ export interface SendCommandOptions {
   personaName?: string;
   printPrompt?: boolean;
   dryRun?: boolean;
+  cliPath?: string;
 }
-
-const WORKER_SCRIPT = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../send-runner.js'
-);
 
 export async function sendCommand(options: SendCommandOptions): Promise<void> {
   if (!options.threadId) {
@@ -64,6 +60,7 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
 }
 
 function launchDetachedSendWorker(options: SendCommandOptions): void {
+  const cliPath = resolveCliPath(options.cliPath);
   const payloadData = {
     rootDir: options.rootDir ? path.resolve(options.rootDir) : undefined,
     threadId: options.threadId,
@@ -76,9 +73,19 @@ function launchDetachedSendWorker(options: SendCommandOptions): void {
   };
 
   const payload = Buffer.from(JSON.stringify(payloadData), 'utf8').toString('base64');
-  const child = spawn(process.execPath, [WORKER_SCRIPT, '--payload', payload], {
+  const child = spawn(process.execPath, [cliPath, 'worker-send', '--payload', payload], {
     detached: true,
     stdio: 'ignore',
   });
   child.unref();
+}
+
+function resolveCliPath(overridePath?: string): string {
+  if (overridePath) {
+    return path.resolve(overridePath);
+  }
+  if (process.argv[1]) {
+    return process.argv[1];
+  }
+  return fileURLToPath(new URL('../bin/codex-subagent.ts', import.meta.url));
 }
