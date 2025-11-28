@@ -75,6 +75,37 @@ describe('peek command', () => {
     expect(output.join('')).toContain('No updates for thread thread-123');
   });
 
+  it('shows last activity timestamps when verbose and no updates exist', async () => {
+    const { codexRoot, paths, registry } = await setupThread();
+    await registry.updateThread('thread-123', {
+      last_pulled_id: 'msg-new',
+      updated_at: '2025-11-27T22:15:00Z',
+    });
+    const logPath = paths.logFile('thread-123');
+    await writeFile(
+      logPath,
+      [
+        { id: 'msg-old', text: 'Old info', created_at: '2025-11-27T22:00:00Z' },
+        { id: 'msg-new', text: 'New hotness', created_at: '2025-11-27T22:05:00Z' },
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join('\n') + '\n'
+    );
+
+    const { stdout, output } = captureOutput();
+    await peekCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      stdout,
+      controllerId: 'controller-one',
+      verbose: true,
+    });
+
+    const text = output.join('');
+    expect(text).toContain('No updates for thread thread-123');
+    expect(text).toContain('Last activity 2025-11-27T22:05:00Z');
+  });
+
   it('informs the user when no log exists yet', async () => {
     const { codexRoot } = await setupThread();
     const { stdout, output } = captureOutput();

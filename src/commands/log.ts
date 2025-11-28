@@ -13,6 +13,7 @@ export interface LogCommandOptions {
   raw?: boolean;
   stdout?: Writable;
   controllerId: string;
+  verbose?: boolean;
 }
 
 export async function logCommand(options: LogCommandOptions): Promise<void> {
@@ -25,13 +26,20 @@ export async function logCommand(options: LogCommandOptions): Promise<void> {
   await paths.ensure();
 
   const registry = new Registry(paths);
-  await assertThreadOwnership(await registry.get(options.threadId), options.controllerId, registry);
+  const thread = await assertThreadOwnership(
+    await registry.get(options.threadId),
+    options.controllerId,
+    registry
+  );
 
   const logPath = paths.logFile(options.threadId);
   try {
     await access(logPath, fsConstants.F_OK);
   } catch {
     stdout.write(`No log entries found for thread ${options.threadId}\n`);
+    if (options.verbose) {
+      writeLastActivity(stdout, thread?.updated_at);
+    }
     return;
   }
 
@@ -43,6 +51,9 @@ export async function logCommand(options: LogCommandOptions): Promise<void> {
 
   if (lines.length === 0) {
     stdout.write(`No log entries found for thread ${options.threadId}\n`);
+    if (options.verbose) {
+      writeLastActivity(stdout, thread?.updated_at);
+    }
     return;
   }
 
@@ -51,17 +62,41 @@ export async function logCommand(options: LogCommandOptions): Promise<void> {
 
   if (options.raw) {
     stdout.write(`${slice.join('\n')}\n`);
-    return;
-  }
-
-  stdout.write(`Log entries for thread ${options.threadId} (${slice.length})\n`);
-  for (const line of slice) {
-    try {
-      const entry = JSON.parse(line);
-      const text = typeof entry.text === 'string' ? entry.text : '[no-text]';
-      stdout.write(`- ${entry.id ?? '[unknown-id]'} · ${text}\n`);
-    } catch {
-      stdout.write(`- [invalid-json] · ${line}\n`);
+  } else {
+    stdout.write(`Log entries for thread ${options.threadId} (${slice.length})\n`);
+    for (const line of slice) {
+      try {
+        const entry = JSON.parse(line);
+        const text = typeof entry.text === 'string' ? entry.text : '[no-text]';
+        stdout.write(`- ${entry.id ?? '[unknown-id]'} · ${text}\n`);
+      } catch {
+        stdout.write(`- [invalid-json] · ${line}\n`);
+      }
     }
   }
+
+  if (options.verbose) {
+    const timestamp = slice.length > 0 ? extractTimestampFromLine(slice[slice.length - 1]) : undefined;
+    writeLastActivity(stdout, timestamp ?? thread?.updated_at);
+  }
+}
+
+function writeLastActivity(stdout: Writable, timestamp?: string): void {
+  if (!timestamp) {
+    stdout.write('Last activity time unavailable\n');
+    return;
+  }
+  stdout.write(`Last activity ${timestamp}\n`);
+}
+
+function extractTimestampFromLine(line: string): string | undefined {
+  try {
+    const entry = JSON.parse(line);
+    if (entry && typeof entry.created_at === 'string') {
+      return entry.created_at;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }

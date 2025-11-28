@@ -77,4 +77,29 @@ describe('log command', () => {
     expect(lines[0]).toContain('msg-2');
     expect(lines[1]).toContain('msg-3');
   });
+
+  it('prints last activity metadata when verbose', async () => {
+    const { codexRoot, paths } = await setup();
+    await writeFile(
+      paths.logFile('thread-123'),
+      [
+        { id: 'msg-1', text: 'first', created_at: '2025-11-27T22:00:00Z' },
+        { id: 'msg-2', text: 'second', created_at: '2025-11-27T22:10:00Z' },
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join('\n') + '\n'
+    );
+
+    const { stdout, output } = captureOutput();
+    await logCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      stdout,
+      controllerId: 'controller-one',
+      verbose: true,
+    });
+
+    const text = output.join('');
+    expect(text).toContain('Last activity 2025-11-27T22:10:00Z');
+  });
 });

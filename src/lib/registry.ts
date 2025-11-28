@@ -23,6 +23,7 @@ export interface ThreadMetadata {
   updated_at?: string;
   controller_id?: string;
   label?: string;
+  persona?: string;
 }
 
 type ThreadMap = Record<string, ThreadMetadata>;

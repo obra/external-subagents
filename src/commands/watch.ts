@@ -12,6 +12,8 @@ export interface WatchCommandOptions {
   signal?: AbortSignal;
   iterations?: number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<boolean>;
+  durationMs?: number;
+  now?: () => number;
   controllerId: string;
 }
 
@@ -43,7 +45,13 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
   const intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
   const signal = options.signal;
   const sleep = options.sleep ?? defaultSleep;
+  const durationMs = options.durationMs;
+  const nowFn = options.now ?? Date.now;
+  if (durationMs !== undefined && durationMs <= 0) {
+    throw new Error('--duration-ms must be greater than 0');
+  }
   let remaining = options.iterations ?? Number.POSITIVE_INFINITY;
+  const startedAt = nowFn();
 
   stdout.write(
     `Watching thread ${options.threadId} every ${intervalMs}ms. Press Ctrl+C to stop.\n`
@@ -67,6 +75,16 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
       break;
     }
 
+    if (durationMs !== undefined) {
+      const elapsed = nowFn() - startedAt;
+      if (elapsed >= durationMs) {
+        stdout.write(
+          `No updates for thread ${options.threadId} after ${formatDuration(durationMs)}; exiting.\n`
+        );
+        break;
+      }
+    }
+
     if (signal?.aborted) {
       break;
     }
@@ -78,4 +96,20 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
   }
 
   stdout.write(`Stopped watching thread ${options.threadId}\n`);
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+  const seconds = ms / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(seconds % 1 === 0 ? 0 : 1)}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (remainingSeconds === 0) {
+    return `${minutes}m`;
+  }
+  return `${minutes}m ${remainingSeconds.toFixed(remainingSeconds % 1 === 0 ? 0 : 1)}s`;
 }

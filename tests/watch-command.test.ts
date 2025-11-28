@@ -59,4 +59,38 @@ describe('watch command', () => {
 
     expect(vi.mocked(peekCommand)).toHaveBeenCalledTimes(1);
   });
+
+  it('exits cleanly when duration elapses without updates', async () => {
+    const { stdout, output } = captureOutput();
+    const sleep = vi.fn();
+    const nowMock = vi.fn();
+    nowMock.mockReturnValueOnce(0); // start timestamp
+    nowMock.mockReturnValueOnce(1_100); // after first peek
+    nowMock.mockReturnValue(1_100);
+
+    await watchCommand({
+      threadId: 'thread-123',
+      stdout,
+      durationMs: 1_000,
+      now: nowMock,
+      sleep,
+      controllerId: 'controller-one',
+      iterations: Number.POSITIVE_INFINITY,
+    });
+
+    expect(vi.mocked(peekCommand)).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(output.join('')).toContain('after 1s; exiting');
+    expect(output.join('')).toContain('Stopped watching thread thread-123');
+  });
+
+  it('throws on non-positive duration values', async () => {
+    await expect(
+      watchCommand({
+        threadId: 'thread-123',
+        durationMs: 0,
+        controllerId: 'controller-one',
+      })
+    ).rejects.toThrow('--duration-ms must be greater than 0');
+  });
 });
