@@ -14,6 +14,6 @@
 - [x] Map persona `model` aliases (`sonnet`, `haiku`, `opus`, `inherit`) onto appropriate Codex profiles/sandboxes automatically, with warnings when a model can’t be matched.
 - [x] Honor persona `skills` by auto-loading the referenced skill files before launching the subagent (if available locally), so personas can enforce their own workflows.
 - [x] Extend `help`/docs/skill sections to explain personas, `status`, and `archive`, including examples of using `--persona` together with `--cwd`, `--label`, etc.
-- [ ] Improve startup diagnostics so failed `start`/`send` attempts surface actionable errors (e.g., log runner stderr, show "NOT RUNNING" in `list`, and warn when a thread never progressed past launch).
+- [x] Improve startup diagnostics so failed `start`/`send` attempts surface actionable errors (log runner stderr to `.codex-subagent/state/launch-errors`, show `NOT RUNNING` in `list`, warn via `Launch diagnostics` when a launch never progressed past start).
 - [x] Re-run the full Codex real-world test (with sandbox disabled) to confirm the new single-binary workflow writes `.codex-subagent/state/threads.json`, and capture the transcript for docs. (See `docs/examples/2025-11-28-realworld-smoke.log` for the latest run.)
 - [x] Document the hidden `worker-start` / `worker-send` subcommands in developer notes so future maintainers understand how detached launches re-enter the CLI.

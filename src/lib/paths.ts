@@ -24,6 +24,18 @@ export class Paths {
     return path.join(this.stateDir, 'threads.json');
   }
 
+  get launchesFile(): string {
+    return path.join(this.stateDir, 'launches.json');
+  }
+
+  get launchErrorsDir(): string {
+    return path.join(this.stateDir, 'launch-errors');
+  }
+
+  launchErrorFile(id: string): string {
+    return path.join(this.launchErrorsDir, `${id}.log`);
+  }
+
   logFile(threadId: string): string {
     return path.join(this.logsDir, `${threadId}.ndjson`);
   }
@@ -41,6 +53,7 @@ export class Paths {
       mkdir(this.stateDir, { recursive: true }),
       mkdir(this.logsDir, { recursive: true }),
       mkdir(this.archiveRoot, { recursive: true }),
+      mkdir(this.launchErrorsDir, { recursive: true }),
     ]);
   }
 

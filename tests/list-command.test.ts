@@ -28,6 +28,14 @@ async function createStateFixture(): Promise<string> {
   return tmp;
 }
 
+async function writeLaunches(root: string, launches: Record<string, unknown>): Promise<void> {
+  const stateDir = path.join(root, '.codex-subagent', 'state');
+  await mkdir(stateDir, { recursive: true });
+  await mkdir(path.join(stateDir, 'launch-errors'), { recursive: true });
+  const launchesFile = path.join(stateDir, 'launches.json');
+  await writeFile(launchesFile, JSON.stringify(launches, null, 2), 'utf8');
+}
+
 function captureOutput() {
   const output: string[] = [];
   const stdout = new Writable({
@@ -113,14 +121,14 @@ describe('list command', () => {
     const root = await createStateFixture();
     const threadsFile = path.join(root, '.codex-subagent', 'state', 'threads.json');
     const data = {
-      'RUNNING': {
+      RUNNING: {
         ...sampleThread,
         thread_id: 'RUNNING',
         status: 'running',
         label: 'Task 3 – log summaries',
         updated_at: new Date().toISOString(),
       },
-      'COMPLETE': {
+      COMPLETE: {
         ...sampleThread,
         thread_id: 'COMPLETE',
         status: 'completed',
@@ -137,8 +145,75 @@ describe('list command', () => {
     });
 
     const text = output.join('');
-    expect(text.indexOf('RUNNING (Task 3 – log summaries)')).toBeLessThan(
-      text.indexOf('COMPLETE')
-    );
+    expect(text.indexOf('RUNNING (Task 3 – log summaries)')).toBeLessThan(text.indexOf('COMPLETE'));
+  });
+
+  it('shows failed launch diagnostics with NOT RUNNING text', async () => {
+    const root = await createStateFixture();
+    const codexRoot = path.join(root, '.codex-subagent');
+    const stateDir = path.join(codexRoot, 'state');
+    const logDir = path.join(stateDir, 'launch-errors');
+    await mkdir(logDir, { recursive: true });
+    const logPath = path.join(logDir, 'launch-failure.log');
+    await writeFile(logPath, 'stderr output', 'utf8');
+
+    await writeLaunches(root, {
+      'launch-failure': {
+        id: 'launch-failure',
+        controller_id: 'controller-one',
+        type: 'start',
+        status: 'failed',
+        label: 'Task Alpha',
+        error_message: 'codex exec failed: profile missing',
+        log_path: logPath,
+        created_at: '2025-11-26T12:00:00Z',
+        updated_at: '2025-11-26T12:01:00Z',
+      },
+    });
+
+    const { stdout, output } = captureOutput();
+    await listCommand({
+      rootDir: codexRoot,
+      stdout,
+      controllerId: 'controller-one',
+      now: () => new Date('2025-11-26T12:05:00Z').valueOf(),
+    });
+
+    const text = output.join('');
+    expect(text).toContain('Launch diagnostics');
+    expect(text).toContain('launch-failure');
+    expect(text).toContain('NOT RUNNING');
+    expect(text).toContain('codex exec failed');
+    expect(text).toContain('See');
+  });
+
+  it('warns when a launch has been pending for several minutes', async () => {
+    const root = await createStateFixture();
+    const codexRoot = path.join(root, '.codex-subagent');
+
+    await writeLaunches(root, {
+      'launch-pending': {
+        id: 'launch-pending',
+        controller_id: 'controller-one',
+        type: 'start',
+        status: 'pending',
+        label: 'Task Beta',
+        created_at: '2025-11-26T12:00:00Z',
+        updated_at: '2025-11-26T12:00:00Z',
+      },
+    });
+
+    const { stdout, output } = captureOutput();
+    await listCommand({
+      rootDir: codexRoot,
+      stdout,
+      controllerId: 'controller-one',
+      now: () => new Date('2025-11-26T12:07:00Z').valueOf(),
+    });
+
+    const text = output.join('');
+    expect(text).toContain('Launch diagnostics');
+    expect(text).toContain('launch-pending');
+    expect(text).toContain('still waiting for Codex');
   });
 });

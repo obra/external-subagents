@@ -12,6 +12,7 @@ Install (or reinstall) via `npm install --prefix ~/.codex/skills/using-subagents
   --prompt-file task.txt [--cwd /path/to/repo] [--persona code-reviewer] [--label "Task Name"] \
   [--output-last last.txt] [--controller-id demo-doc] [--wait]
 ```
+
 - Write prompts to files to avoid shell quoting issues, or feed structured JSON via `--json prompt.json` / `--json -` (stdin) with keys such as `prompt`, `role`, `policy`, `cwd`, `label`, `persona`, `output_last`, and `wait`.
 - `workspace-write` is the recommended policy; custom policy names only work if you have matching Codex profiles configured. When you pass `--persona`, the persona’s `model` field remaps the sandbox (e.g., `haiku` → `read-only`, `sonnet` → `workspace-write`).
 - **Detached by default:** without `--wait`, `start` spawns a background Codex process and returns immediately. Long-running tasks may take minutes or hours; use `peek`/`log` later to inspect results, or add `--wait` when you need to stream the entire run inline.
@@ -30,13 +31,13 @@ When you need several helpers at once, put them in a JSON manifest instead of ha
     "role": "researcher",
     "policy": "workspace-write",
     "cwd": "/repo/a",
-    "label": "Alpha task"
+    "label": "Alpha task",
   },
   {
     "prompt": "You are Beta...",
     "persona": "code-reviewer",
-    "wait": true
-  }
+    "wait": true,
+  },
 ]
 ```
 
@@ -121,6 +122,19 @@ codex-subagent label --thread <thread_id> --label "Task 3 – log summaries"
 ```
 
 Pass an empty string to clear the label. New threads can also be labeled at launch with `start --label "…"`.
+
+### Launch diagnostics when things go sideways
+
+Detached `start`/`send` attempts now record their lifecycle under `.codex-subagent/state/launches.json`. When you run `codex-subagent list`, you’ll see a `Launch diagnostics` section whenever:
+
+- A launch failed before Codex produced any messages (shows `NOT RUNNING` + the formatted error, plus a pointer to `.codex-subagent/state/launch-errors/<launch-id>.log` so you can read the captured stderr/stack).
+- A launch has been pending for a couple of minutes with no thread yet (prints “Warning: still waiting for Codex (no thread yet)” so you know to re-run or investigate).
+
+Actionable workflow:
+
+1. After starting helpers, run `codex-subagent list`. If you see a warning, open the referenced log (`bat`, `less`, etc.) to read the full failure.
+2. Fix the underlying issue (missing profile, sandbox denial, bad cwd) and relaunch.
+3. When a detached `send` fails, the owning thread flips to `Status: NOT RUNNING` and `status` will print the captured error message. Use that output in your main Codex session to explain what went wrong without replaying the entire log.
 
 ## 6. Cleanup / Archival
 

@@ -8,6 +8,8 @@ import { runStartThreadWorkflow } from '../lib/start-thread.ts';
 import { loadPersonaRuntime, mapModelAliasToPolicy, PersonaRuntime } from '../lib/personas.ts';
 import { StartManifest } from '../lib/start-manifest.ts';
 import { composePrompt } from '../lib/prompt.ts';
+import { LaunchRegistry } from '../lib/launch-registry.ts';
+import { Paths } from '../lib/paths.ts';
 
 export interface StartCommandOptions {
   rootDir?: string;
@@ -50,6 +52,8 @@ interface ManifestResult {
 export async function startCommand(options: StartCommandOptions): Promise<string | undefined> {
   const stdout = options.stdout ?? process.stdout;
   const projectRoot = getProjectRoot(options.rootDir);
+  const paths = new Paths(options.rootDir ? path.resolve(options.rootDir) : undefined);
+  const launchRegistry = new LaunchRegistry(paths);
   const personaCache = new Map<string, PersonaRuntime>();
 
   if (options.manifest) {
@@ -63,6 +67,7 @@ export async function startCommand(options: StartCommandOptions): Promise<string
       baseOptions: options,
       projectRoot,
       personaCache,
+      launchRegistry,
     });
     return undefined;
   }
@@ -124,6 +129,18 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     return result.threadId;
   }
 
+  let launchId: string | undefined;
+  if (!options.printPrompt && !options.dryRun) {
+    const attempt = await launchRegistry.createAttempt({
+      controllerId: options.controllerId,
+      type: 'start',
+      label: options.label,
+      role,
+      policy: resolvedPolicy,
+    });
+    launchId = attempt.id;
+  }
+
   launchDetachedWorker({
     rootDir: options.rootDir,
     role,
@@ -136,6 +153,7 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     label: options.label,
     persona,
     cliPath: options.cliPath,
+    launchId,
   });
   stdout.write(
     'Subagent launched in the background; Codex may run for minutes or hours. Use `codex-subagent list`, `peek`, or `log` later to inspect results.\n'
@@ -150,6 +168,7 @@ async function runManifestStart(args: {
   baseOptions: StartCommandOptions;
   projectRoot: string;
   personaCache: Map<string, PersonaRuntime>;
+  launchRegistry: LaunchRegistry;
 }): Promise<void> {
   const baseDir =
     args.manifest.source && args.manifest.source !== 'stdin'
@@ -195,6 +214,13 @@ async function runManifestStart(args: {
         threadId: result.threadId,
       });
     } else {
+      const attempt = await args.launchRegistry.createAttempt({
+        controllerId: args.controllerId,
+        type: 'start',
+        label: task.label,
+        role: task.role,
+        policy: resolvedPolicy,
+      });
       launchDetachedWorker({
         rootDir: args.baseOptions.rootDir,
         role: task.role,
@@ -207,6 +233,7 @@ async function runManifestStart(args: {
         label: task.label,
         persona,
         cliPath: args.baseOptions.cliPath,
+        launchId: attempt.id,
       });
       results.push({
         index,
@@ -222,9 +249,7 @@ async function runManifestStart(args: {
   for (const result of results) {
     const label = result.label ?? `Task ${result.index + 1}`;
     const threadInfo =
-      result.mode === 'waited'
-        ? `thread ${result.threadId ?? '[unknown]'}` :
-          'thread pending';
+      result.mode === 'waited' ? `thread ${result.threadId ?? '[unknown]'}` : 'thread pending';
     args.stdout.write(`- [${result.index}] ${label} · ${result.mode} · ${threadInfo}\n`);
   }
 }
@@ -337,6 +362,7 @@ interface DetachedWorkerOptions {
   label?: string;
   persona?: PersonaRuntime;
   cliPath?: string;
+  launchId?: string;
 }
 
 function launchDetachedWorker(options: DetachedWorkerOptions): void {
@@ -352,6 +378,7 @@ function launchDetachedWorker(options: DetachedWorkerOptions): void {
     workingDir: options.workingDir ? path.resolve(options.workingDir) : undefined,
     label: options.label,
     persona: options.persona ?? null,
+    launchId: options.launchId,
   };
 
   const payload = Buffer.from(JSON.stringify(payloadData), 'utf8').toString('base64');

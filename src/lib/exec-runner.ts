@@ -71,7 +71,13 @@ export async function runExec(options: ExecOptions): Promise<ExecResult> {
   try {
     ({ stdout } = await execa('codex', args, { input: promptBody }));
   } catch (error) {
-    throw formatCodexExecError(error);
+    const formatted = formatCodexExecError(error);
+    if (isExecaError(error)) {
+      const errWithOutput = formatted as ErrorWithOutput;
+      errWithOutput.stderr = coerceBuffer(error.stderr);
+      errWithOutput.stdout = coerceBuffer(error.stdout);
+    }
+    throw formatted;
   }
 
   const lines = stdout
@@ -191,4 +197,19 @@ function deriveRecoveryHint(stderr: string, stdout: string): string | undefined 
 
 function isExecaError(error: unknown): error is ExecaError {
   return Boolean(error && typeof error === 'object' && 'isCanceled' in error);
+}
+
+interface ErrorWithOutput extends Error {
+  stderr?: string;
+  stdout?: string;
+}
+
+function coerceBuffer(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.toString('utf8');
+  }
+  return undefined;
 }

@@ -53,13 +53,12 @@ export async function statusCommand(options: StatusCommandOptions): Promise<void
   const latest = messages.at(-1);
   const lastActivityTs = latest?.created_at ?? thread.updated_at;
 
-  stdout.write(
-    `Thread ${thread.thread_id}${thread.label ? ` (${thread.label})` : ''}\n`
-  );
-  const status = thread.status ?? 'unknown';
-  stdout.write(
-    `Status: ${status} · updated ${formatRelativeTime(thread.updated_at, nowMs)}\n`
-  );
+  stdout.write(`Thread ${thread.thread_id}${thread.label ? ` (${thread.label})` : ''}\n`);
+  const status = formatStatus(thread.status);
+  stdout.write(`Status: ${status} · updated ${formatRelativeTime(thread.updated_at, nowMs)}\n`);
+  if (thread.error_message) {
+    stdout.write(`Error: ${thread.error_message}\n`);
+  }
 
   if (latest) {
     stdout.write('Latest assistant message:\n');
@@ -75,9 +74,7 @@ export async function statusCommand(options: StatusCommandOptions): Promise<void
   if (lastActivityTs) {
     const idleMinutes = Math.floor((nowMs - Date.parse(lastActivityTs)) / 60000);
     if (idleMinutes >= staleMinutes) {
-      stdout.write(
-        `Suggestion: send a follow-up prompt (idle for ${idleMinutes}m).\n`
-      );
+      stdout.write(`Suggestion: send a follow-up prompt (idle for ${idleMinutes}m).\n`);
     }
   }
 
@@ -88,9 +85,7 @@ export async function statusCommand(options: StatusCommandOptions): Promise<void
         stdout.write(`${slice.join('\n')}\n`);
       }
     } else {
-      stdout.write(
-        `Log tail for thread ${options.threadId} (${slice.length})\n`
-      );
+      stdout.write(`Log tail for thread ${options.threadId} (${slice.length})\n`);
       for (const line of slice) {
         try {
           const entry = JSON.parse(line);
@@ -101,4 +96,15 @@ export async function statusCommand(options: StatusCommandOptions): Promise<void
       }
     }
   }
+}
+
+function formatStatus(status?: string): string {
+  if (!status) {
+    return 'unknown';
+  }
+  const normalized = status.toLowerCase();
+  if (normalized === 'failed' || normalized === 'not_running') {
+    return 'NOT RUNNING';
+  }
+  return normalized;
 }

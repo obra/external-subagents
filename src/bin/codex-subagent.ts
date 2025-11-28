@@ -18,6 +18,9 @@ import { parseStartManifest, StartManifest } from '../lib/start-manifest.ts';
 import { runStartThreadWorkflow } from '../lib/start-thread.ts';
 import { runSendThreadWorkflow } from '../lib/send-thread.ts';
 import type { PersonaRuntime } from '../lib/personas.ts';
+import { Paths } from '../lib/paths.ts';
+import { LaunchRegistry } from '../lib/launch-registry.ts';
+import { markThreadError } from '../lib/thread-errors.ts';
 
 const CLI_ENTRY_PATH = fileURLToPath(import.meta.url);
 
@@ -231,9 +234,7 @@ async function loadStartJsonPayload(
     return {};
   }
 
-  const body = flags.jsonFromStdin
-    ? await readStdin()
-    : await readFile(flags.jsonSource, 'utf8');
+  const body = flags.jsonFromStdin ? await readStdin() : await readFile(flags.jsonSource, 'utf8');
   if (!body.trim()) {
     throw new Error('JSON prompt payload was empty.');
   }
@@ -247,12 +248,15 @@ async function loadStartJsonPayload(
     );
   }
 
-  const sourceLabel = flags.jsonFromStdin ? 'stdin' : flags.jsonSource ?? 'json';
-  const baseDir = flags.jsonFromStdin || !flags.jsonSource ? process.cwd() : path.dirname(flags.jsonSource);
+  const sourceLabel = flags.jsonFromStdin ? 'stdin' : (flags.jsonSource ?? 'json');
+  const baseDir =
+    flags.jsonFromStdin || !flags.jsonSource ? process.cwd() : path.dirname(flags.jsonSource);
 
   if (
     Array.isArray(parsed) ||
-    (parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).tasks as unknown[]))
+    (parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray((parsed as Record<string, unknown>).tasks as unknown[]))
   ) {
     return { manifest: parseStartManifest(parsed, sourceLabel) };
   }
@@ -316,9 +320,7 @@ async function loadSendJsonPayload(flags: SendFlags): Promise<SendJsonPayload | 
     return undefined;
   }
 
-  const body = flags.jsonFromStdin
-    ? await readStdin()
-    : await readFile(flags.jsonSource, 'utf8');
+  const body = flags.jsonFromStdin ? await readStdin() : await readFile(flags.jsonSource, 'utf8');
   if (!body.trim()) {
     throw new Error('Send JSON payload was empty.');
   }
@@ -332,15 +334,16 @@ async function loadSendJsonPayload(flags: SendFlags): Promise<SendJsonPayload | 
     );
   }
 
-  const baseDir = flags.jsonFromStdin || !flags.jsonSource ? process.cwd() : path.dirname(flags.jsonSource);
-  return normalizeSendJsonPayload(parsed, flags.jsonFromStdin ? 'stdin' : flags.jsonSource ?? 'json', baseDir);
+  const baseDir =
+    flags.jsonFromStdin || !flags.jsonSource ? process.cwd() : path.dirname(flags.jsonSource);
+  return normalizeSendJsonPayload(
+    parsed,
+    flags.jsonFromStdin ? 'stdin' : (flags.jsonSource ?? 'json'),
+    baseDir
+  );
 }
 
-function normalizeSendJsonPayload(
-  data: unknown,
-  source: string,
-  baseDir: string
-): SendJsonPayload {
+function normalizeSendJsonPayload(data: unknown, source: string, baseDir: string): SendJsonPayload {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error(`Send JSON payload from ${source} must be an object.`);
   }
@@ -663,14 +666,20 @@ function parseWaitFlags(args: string[]): WaitFlags {
         if (!next) {
           throw new Error('--threads flag requires a comma-separated list of thread IDs');
         }
-        flags.threads = next.split(',').map((value) => value.trim()).filter(Boolean);
+        flags.threads = next
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean);
         i++;
         break;
       case '--labels':
         if (!next) {
           throw new Error('--labels flag requires a comma-separated list of labels');
         }
-        flags.labels = next.split(',').map((value) => value.trim()).filter(Boolean);
+        flags.labels = next
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean);
         i++;
         break;
       case '--all-controller':
@@ -779,74 +788,74 @@ function printHelp(): void {
     'Options:',
     '  --root <path>          Override the .codex-subagent root directory',
     '  --controller-id <id>   Override auto-detected controller session ID',
-  '  start flags:',
-  '    --role <name>         Required Codex role (e.g., researcher)',
-  '    --policy <policy>     Required policy (never "allow everything")',
-  '    --prompt-file <path>  Prompt contents for the subagent',
-  '    --output-last <path>  Optional file for last message text',
-  '    --cwd <path>          Optional working directory instruction for the subagent',
-  '    --label <text>        Optional friendly label stored with the thread',
-  '    --persona <name>      Optional persona to load from .codex/agents',
-  '    --manifest <path>     Launch multiple tasks defined in a JSON manifest',
-  '    --manifest-stdin      Read manifest JSON from stdin',
-  '    --wait                Block until Codex finishes (default: detach)',
-  '  send flags:',
-  '    --thread <id>         Target thread to resume (required)',
-  '    --prompt-file <path>  Prompt file for the next turn',
-  '    --output-last <path>  Optional file for last message text',
-  '    --cwd <path>          Optional working directory instruction for the subagent',
-  '    --persona <name>      Optional persona override for this turn',
-  '    --wait                Block until Codex finishes (default: detach)',
-  '  peek flags:',
-  '    --thread <id>         Target thread to inspect (required)',
-  '    --output-last <path>  Optional file for last message text',
-  '    --verbose             Include last-activity metadata even when no updates',
-  '  log flags:',
-  '    --thread <id>         Target thread to inspect (required)',
-  '    --tail <n>            Optional number of most recent entries to show',
-  '    --raw                 Output raw NDJSON lines',
-  '    --verbose             Append last-activity metadata',
-  '  status flags:',
-  '    --thread <id>         Target thread to inspect (required)',
-  '    --tail <n>            Optional number of most recent entries to show',
-  '    --raw                 Output raw NDJSON lines',
-  '    --stale-minutes <n>   Override idle threshold for follow-up suggestion (default 15)',
-  '  archive flags:',
-  '    --thread <id>         Archive a specific thread',
-  '    --completed           Archive all completed threads (per controller)',
-  '    --yes                 Required to actually archive (safety guard)',
-  '    --dry-run             Show what would archive without moving files',
-  '  watch flags:',
-  '    --thread <id>         Target thread to watch (required)',
-  '    --interval-ms <n>     Interval between peeks (default 5000)',
-  '    --output-last <path>  Optional file for last message text',
-  '    --duration-ms <n>     Optional max runtime before exiting cleanly',
-  '  label flags:',
-  '    --thread <id>         Target thread to label (required)',
-  '    --label <text>        Friendly label text (empty string clears it)',
-  '  wait flags:',
-  '    --threads <ids>       Comma-separated thread IDs to wait on',
-  '    --labels <labels>     Comma-separated labels to wait on',
-  '    --all-controller      Wait for every thread owned by this controller',
-  '    --interval-ms <n>     Polling interval (default 5000)',
-  '    --timeout-ms <n>      Optional timeout before exiting with failure',
-  '    --follow-last         Print the last assistant message when each thread stops',
-  '',
-  'Examples:',
-  '  # Launch a detached researcher subagent',
-  '  codex-subagent start --role researcher --policy workspace-write --prompt-file task.txt',
-  '  # Resume a thread but wait for completion',
-  '  codex-subagent send --thread 019... --prompt-file followup.txt --wait',
-  '  # Peek the most recent assistant turn without resuming Codex',
-  '  codex-subagent peek --thread 019...',
-  '  # Watch for new turns for up to 60 seconds, then exit cleanly',
-  '  codex-subagent watch --thread 019... --duration-ms 60000',
-  '  # Give a friendly label to a thread',
-  '  codex-subagent label --thread 019... --label "Task 3 – log summaries"',
-  '',
-  'Notes:',
-  '  start/send run detached unless you pass --wait.',
-  '  watch never resumes Codex; it only replays peek output. Prefer peek/log when you just need the latest turn.',
+    '  start flags:',
+    '    --role <name>         Required Codex role (e.g., researcher)',
+    '    --policy <policy>     Required policy (never "allow everything")',
+    '    --prompt-file <path>  Prompt contents for the subagent',
+    '    --output-last <path>  Optional file for last message text',
+    '    --cwd <path>          Optional working directory instruction for the subagent',
+    '    --label <text>        Optional friendly label stored with the thread',
+    '    --persona <name>      Optional persona to load from .codex/agents',
+    '    --manifest <path>     Launch multiple tasks defined in a JSON manifest',
+    '    --manifest-stdin      Read manifest JSON from stdin',
+    '    --wait                Block until Codex finishes (default: detach)',
+    '  send flags:',
+    '    --thread <id>         Target thread to resume (required)',
+    '    --prompt-file <path>  Prompt file for the next turn',
+    '    --output-last <path>  Optional file for last message text',
+    '    --cwd <path>          Optional working directory instruction for the subagent',
+    '    --persona <name>      Optional persona override for this turn',
+    '    --wait                Block until Codex finishes (default: detach)',
+    '  peek flags:',
+    '    --thread <id>         Target thread to inspect (required)',
+    '    --output-last <path>  Optional file for last message text',
+    '    --verbose             Include last-activity metadata even when no updates',
+    '  log flags:',
+    '    --thread <id>         Target thread to inspect (required)',
+    '    --tail <n>            Optional number of most recent entries to show',
+    '    --raw                 Output raw NDJSON lines',
+    '    --verbose             Append last-activity metadata',
+    '  status flags:',
+    '    --thread <id>         Target thread to inspect (required)',
+    '    --tail <n>            Optional number of most recent entries to show',
+    '    --raw                 Output raw NDJSON lines',
+    '    --stale-minutes <n>   Override idle threshold for follow-up suggestion (default 15)',
+    '  archive flags:',
+    '    --thread <id>         Archive a specific thread',
+    '    --completed           Archive all completed threads (per controller)',
+    '    --yes                 Required to actually archive (safety guard)',
+    '    --dry-run             Show what would archive without moving files',
+    '  watch flags:',
+    '    --thread <id>         Target thread to watch (required)',
+    '    --interval-ms <n>     Interval between peeks (default 5000)',
+    '    --output-last <path>  Optional file for last message text',
+    '    --duration-ms <n>     Optional max runtime before exiting cleanly',
+    '  label flags:',
+    '    --thread <id>         Target thread to label (required)',
+    '    --label <text>        Friendly label text (empty string clears it)',
+    '  wait flags:',
+    '    --threads <ids>       Comma-separated thread IDs to wait on',
+    '    --labels <labels>     Comma-separated labels to wait on',
+    '    --all-controller      Wait for every thread owned by this controller',
+    '    --interval-ms <n>     Polling interval (default 5000)',
+    '    --timeout-ms <n>      Optional timeout before exiting with failure',
+    '    --follow-last         Print the last assistant message when each thread stops',
+    '',
+    'Examples:',
+    '  # Launch a detached researcher subagent',
+    '  codex-subagent start --role researcher --policy workspace-write --prompt-file task.txt',
+    '  # Resume a thread but wait for completion',
+    '  codex-subagent send --thread 019... --prompt-file followup.txt --wait',
+    '  # Peek the most recent assistant turn without resuming Codex',
+    '  codex-subagent peek --thread 019...',
+    '  # Watch for new turns for up to 60 seconds, then exit cleanly',
+    '  codex-subagent watch --thread 019... --duration-ms 60000',
+    '  # Give a friendly label to a thread',
+    '  codex-subagent label --thread 019... --label "Task 3 – log summaries"',
+    '',
+    'Notes:',
+    '  start/send run detached unless you pass --wait.',
+    '  watch never resumes Codex; it only replays peek output. Prefer peek/log when you just need the latest turn.',
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
 }
@@ -1125,6 +1134,10 @@ async function runWorkerStart(rest: string[]): Promise<void> {
   const payload = decodeWorkerPayload(rest);
   const role = asString(payload.role);
   const policy = asString(payload.policy);
+  const rootDir = asPath(payload.rootDir);
+  const launchId = asString(payload.launchId);
+  const paths = new Paths(rootDir);
+  const launchRegistry = launchId ? new LaunchRegistry(paths) : undefined;
   if (!role) {
     throw new Error('worker payload missing role');
   }
@@ -1132,18 +1145,28 @@ async function runWorkerStart(rest: string[]): Promise<void> {
     throw new Error('worker payload missing policy');
   }
 
-  await runStartThreadWorkflow({
-    rootDir: asPath(payload.rootDir),
-    role,
-    policy,
-    promptFile: asPath(payload.promptFile),
-    promptBody: asString(payload.promptBody),
-    outputLastPath: asPath(payload.outputLastPath),
-    controllerId: asString(payload.controllerId) ?? '',
-    workingDir: asPath(payload.workingDir),
-    label: asString(payload.label),
-    persona: asPersonaRuntime(payload.persona),
-  });
+  try {
+    const result = await runStartThreadWorkflow({
+      rootDir,
+      role,
+      policy,
+      promptFile: asPath(payload.promptFile),
+      promptBody: asString(payload.promptBody),
+      outputLastPath: asPath(payload.outputLastPath),
+      controllerId: asString(payload.controllerId) ?? '',
+      workingDir: asPath(payload.workingDir),
+      label: asString(payload.label),
+      persona: asPersonaRuntime(payload.persona),
+    });
+    if (launchRegistry && launchId) {
+      await launchRegistry.markSuccess(launchId, { threadId: result.threadId });
+    }
+  } catch (error) {
+    if (launchRegistry && launchId) {
+      await launchRegistry.markFailure(launchId, { error });
+    }
+    throw error;
+  }
 }
 
 async function runWorkerSend(rest: string[]): Promise<void> {
@@ -1153,16 +1176,37 @@ async function runWorkerSend(rest: string[]): Promise<void> {
     throw new Error('worker payload missing threadId');
   }
 
-  await runSendThreadWorkflow({
-    rootDir: asPath(payload.rootDir),
-    threadId,
-    promptFile: asPath(payload.promptFile),
-    promptBody: asString(payload.promptBody),
-    outputLastPath: asPath(payload.outputLastPath),
-    controllerId: asString(payload.controllerId) ?? '',
-    workingDir: asPath(payload.workingDir),
-    personaName: asString(payload.personaName),
-  });
+  const rootDir = asPath(payload.rootDir);
+  const controllerId = asString(payload.controllerId) ?? '';
+  const launchId = asString(payload.launchId);
+  const paths = new Paths(rootDir);
+  const launchRegistry = launchId ? new LaunchRegistry(paths) : undefined;
+
+  try {
+    await runSendThreadWorkflow({
+      rootDir,
+      threadId,
+      promptFile: asPath(payload.promptFile),
+      promptBody: asString(payload.promptBody),
+      outputLastPath: asPath(payload.outputLastPath),
+      controllerId,
+      workingDir: asPath(payload.workingDir),
+      personaName: asString(payload.personaName),
+    });
+    if (launchRegistry && launchId) {
+      await launchRegistry.markSuccess(launchId, { threadId });
+    }
+  } catch (error) {
+    if (launchRegistry && launchId) {
+      await launchRegistry.markFailure(launchId, { error });
+    }
+    await markThreadError(paths, {
+      threadId,
+      controllerId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 function decodeWorkerPayload(rest: string[]): Record<string, unknown> {

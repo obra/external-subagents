@@ -40,18 +40,18 @@ This absolute path works no matter which repository the parent Codex session is 
 - `--root <path>`: override the default `.codex-subagent` root.
 - `--controller-id <id>`: override the auto-detected controlling Codex session (use this when multiple Codex windows should share the same subagent state).
 
-| Command | Purpose                                                      |
-| ------- | ------------------------------------------------------------ |
-| `start` | Launch a new Codex exec thread with explicit role/policy (defaults to **detached**, so it returns immediately; add `--wait` to block). |
-| `send`  | Resume an existing thread with a new prompt (defaults to **detached**, add `--wait` to block). |
-| `peek`  | Show the newest unseen assistant message (read-only; `--verbose` prints last-activity info). |
-| `log`   | View the stored NDJSON history (supports `--tail`, `--raw`, `--verbose`). |
-| `status`| Summarize the latest activity for a thread (latest message, idle time, optional log tail). |
-| `watch` | Continuously peek a thread at an interval (use `--duration-ms` to exit cleanly). |
-| `wait`  | Block until specific threads (or labels/all threads) reach a stopped state; optional timeout + “follow last assistant” output. |
-| `archive` | Move completed thread logs/state into `.codex-subagent/archive/...` (with `--yes`/`--dry-run`). |
-| `label` | Attach/update a friendly label for a thread so `list` is easier to scan. |
-| `list`  | List every thread owned by the current controller.           |
+| Command   | Purpose                                                                                                                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start`   | Launch a new Codex exec thread with explicit role/policy (defaults to **detached**, so it returns immediately; add `--wait` to block).                                                    |
+| `send`    | Resume an existing thread with a new prompt (defaults to **detached**, add `--wait` to block).                                                                                            |
+| `peek`    | Show the newest unseen assistant message (read-only; `--verbose` prints last-activity info).                                                                                              |
+| `log`     | View the stored NDJSON history (supports `--tail`, `--raw`, `--verbose`).                                                                                                                 |
+| `status`  | Summarize the latest activity for a thread (latest message, idle time, optional log tail).                                                                                                |
+| `watch`   | Continuously peek a thread at an interval (use `--duration-ms` to exit cleanly).                                                                                                          |
+| `wait`    | Block until specific threads (or labels/all threads) reach a stopped state; optional timeout + “follow last assistant” output.                                                            |
+| `archive` | Move completed thread logs/state into `.codex-subagent/archive/...` (with `--yes`/`--dry-run`).                                                                                           |
+| `label`   | Attach/update a friendly label for a thread so `list` is easier to scan.                                                                                                                  |
+| `list`    | List every thread owned by the current controller (and show a “Launch diagnostics” section when detached `start`/`send` attempts are still pending or have failed, including error logs). |
 
 Per-command notes:
 
@@ -68,6 +68,7 @@ Per-command notes:
 - `--print-prompt` shows the fully composed prompt (persona + working directory instructions) before launching Codex. Add `--dry-run` to skip the Codex invocation entirely after printing—handy for sanity-checking inputs.
 - `label --thread <id> --label "Task X"` lets you rename an existing thread after the fact (pass an empty string to clear it).
 - `archive --thread <id> --yes` moves a completed thread into the archive. Use `--completed --yes` to archive all completed threads, or `--dry-run` to preview.
+- `list` now prints a `Launch diagnostics` section whenever a detached `start`/`send` attempt hasn’t reached Codex yet or failed immediately. Failed launches appear with `NOT RUNNING` plus the captured error message and a pointer to `.codex-subagent/state/launch-errors/<launch-id>.log`; pending launches older than ~2 minutes emit a “still waiting for Codex” warning so you know to investigate.
 
 ### JSON prompt payloads
 
@@ -97,6 +98,12 @@ codex-subagent send --thread 019... --json followup.json --wait
 ```
 
 Relative paths inside the JSON payload are resolved against the file’s directory (or the current working directory when using stdin), so you can keep everything self-contained beside your manifest/prompt files.
+
+### Launch diagnostics & troubleshooting
+
+- **Where errors live:** Every detached `start`/`send` attempt writes a record to `.codex-subagent/state/launches.json` until Codex produces a thread turn. If launch fails (missing profile, sandbox denial, etc.), the CLI preserves the full stderr/stack under `.codex-subagent/state/launch-errors/<launch-id>.log` and `list` marks the attempt as `NOT RUNNING`.
+- **How to detect issues:** Run `codex-subagent list` after launching helpers. If the `Launch diagnostics` section shows a pending attempt with the warning “still waiting for Codex (no thread yet),” Codex hasn’t even started—re-run the prompt or inspect the log file. Failed entries include the exact error plus the log path so you can fix the root cause before retrying.
+- **Thread failures after resume:** When a detached `send` fails, the owning thread’s status flips to `NOT RUNNING` and the reason appears via `list` + `status`. `status --thread <id>` now prints the failure message directly, so you can summarize the issue without re-reading the log.
 
 ### Demo
 

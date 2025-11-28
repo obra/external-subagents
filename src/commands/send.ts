@@ -4,6 +4,9 @@ import { Writable } from 'node:stream';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runSendThreadWorkflow } from '../lib/send-thread.ts';
+import { Paths } from '../lib/paths.ts';
+import { LaunchRegistry } from '../lib/launch-registry.ts';
+import { markThreadError } from '../lib/thread-errors.ts';
 
 export interface SendCommandOptions {
   rootDir?: string;
@@ -30,21 +33,34 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
   }
 
   const stdout = options.stdout ?? process.stdout;
+  const paths = new Paths(options.rootDir ? path.resolve(options.rootDir) : undefined);
+  const launchRegistry = new LaunchRegistry(paths);
   const runInline = options.wait || options.printPrompt || options.dryRun;
   if (runInline) {
-    await runSendThreadWorkflow({
-      rootDir: options.rootDir,
-      threadId: options.threadId,
-      promptFile: options.promptFile ? path.resolve(options.promptFile) : undefined,
-      promptBody: options.promptBody,
-      outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
-      controllerId: options.controllerId,
-      workingDir: options.workingDir ? path.resolve(options.workingDir) : undefined,
-      personaName: options.personaName,
-      printPrompt: Boolean(options.printPrompt),
-      dryRun: Boolean(options.dryRun),
-      stdout,
-    });
+    try {
+      await runSendThreadWorkflow({
+        rootDir: options.rootDir,
+        threadId: options.threadId,
+        promptFile: options.promptFile ? path.resolve(options.promptFile) : undefined,
+        promptBody: options.promptBody,
+        outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
+        controllerId: options.controllerId,
+        workingDir: options.workingDir ? path.resolve(options.workingDir) : undefined,
+        personaName: options.personaName,
+        printPrompt: Boolean(options.printPrompt),
+        dryRun: Boolean(options.dryRun),
+        stdout,
+      });
+    } catch (error) {
+      if (!options.dryRun) {
+        await markThreadError(paths, {
+          threadId: options.threadId,
+          controllerId: options.controllerId,
+          message: formatErrorMessage(error),
+        });
+      }
+      throw error;
+    }
     if (options.dryRun) {
       stdout.write('Dry run: prompt not sent.\n');
     } else {
@@ -53,13 +69,19 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
     return;
   }
 
-  launchDetachedSendWorker(options);
+  const attempt = await launchRegistry.createAttempt({
+    controllerId: options.controllerId,
+    type: 'send',
+    label: options.threadId,
+    threadId: options.threadId,
+  });
+  launchDetachedSendWorker({ ...options, launchId: attempt.id });
   stdout.write(
     'Prompt sent in the background; Codex will continue processing. Use `peek`/`log` later to inspect results.\n'
   );
 }
 
-function launchDetachedSendWorker(options: SendCommandOptions): void {
+function launchDetachedSendWorker(options: SendCommandOptions & { launchId?: string }): void {
   const cliPath = resolveCliPath(options.cliPath);
   const payloadData = {
     rootDir: options.rootDir ? path.resolve(options.rootDir) : undefined,
@@ -70,6 +92,7 @@ function launchDetachedSendWorker(options: SendCommandOptions): void {
     controllerId: options.controllerId,
     workingDir: options.workingDir ? path.resolve(options.workingDir) : undefined,
     personaName: options.personaName,
+    launchId: options.launchId,
   };
 
   const payload = Buffer.from(JSON.stringify(payloadData), 'utf8').toString('base64');
@@ -88,4 +111,11 @@ function resolveCliPath(overridePath?: string): string {
     return process.argv[1];
   }
   return fileURLToPath(new URL('../bin/codex-subagent.ts', import.meta.url));
+}
+
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return typeof error === 'string' ? error : JSON.stringify(error);
 }

@@ -108,4 +108,25 @@ describe('status command', () => {
     expect(text.split('\n').slice(-2)[0]).toContain('msg-2');
     expect(text.split('\n').slice(-1)[0]).toContain('msg-3');
   });
+
+  it('surfaces error messages when a thread failed to resume', async () => {
+    const { codexRoot, registry } = await setup();
+    await registry.updateThread('thread-123', {
+      status: 'failed',
+      error_message: 'codex exec failed: missing policy',
+      updated_at: '2025-11-28T06:31:00Z',
+    });
+
+    const { stdout, output } = captureOutput();
+    await statusCommand({
+      rootDir: codexRoot,
+      threadId: 'thread-123',
+      controllerId: 'controller-one',
+      stdout,
+    });
+
+    const text = output.join('');
+    expect(text).toContain('Status: NOT RUNNING');
+    expect(text).toContain('codex exec failed');
+  });
 });
