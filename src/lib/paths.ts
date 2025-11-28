@@ -16,6 +16,10 @@ export class Paths {
     return path.join(this.root, 'logs');
   }
 
+  get archiveRoot(): string {
+    return path.join(this.root, 'archive');
+  }
+
   get threadsFile(): string {
     return path.join(this.stateDir, 'threads.json');
   }
@@ -24,10 +28,19 @@ export class Paths {
     return path.join(this.logsDir, `${threadId}.ndjson`);
   }
 
+  archiveDir(threadId: string): string {
+    return path.join(this.archiveRoot, threadId);
+  }
+
+  archivedLogFile(threadId: string): string {
+    return path.join(this.archiveDir(threadId), 'log.ndjson');
+  }
+
   async ensure(): Promise<void> {
     await Promise.all([
       mkdir(this.stateDir, { recursive: true }),
       mkdir(this.logsDir, { recursive: true }),
+      mkdir(this.archiveRoot, { recursive: true }),
     ]);
   }
 

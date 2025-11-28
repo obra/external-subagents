@@ -22,6 +22,7 @@ export interface ThreadMetadata {
   last_pulled_id?: string;
   updated_at?: string;
   controller_id?: string;
+  label?: string;
 }
 
 type ThreadMap = Record<string, ThreadMetadata>;
@@ -90,6 +91,19 @@ export class Registry {
     data[trimmed] = entry;
     await this.writeAll(data);
     return entry;
+  }
+
+  async remove(threadId: string): Promise<void> {
+    const trimmed = threadId?.trim();
+    if (!trimmed) {
+      throw new Error('thread_id is required');
+    }
+    const data = await this.readAll();
+    if (!data[trimmed]) {
+      return;
+    }
+    delete data[trimmed];
+    await this.writeAll(data);
   }
 
   private async readAll(): Promise<ThreadMap> {

@@ -7,6 +7,7 @@ import { peekCommand } from '../commands/peek.ts';
 import { logCommand } from '../commands/log.ts';
 import { watchCommand } from '../commands/watch.ts';
 import { statusCommand } from '../commands/status.ts';
+import { archiveCommand } from '../commands/archive.ts';
 import { labelCommand } from '../commands/label.ts';
 import { RegistryLoadError } from '../lib/registry.ts';
 import { getControllerId } from '../lib/controller-id.ts';
@@ -229,6 +230,13 @@ interface StatusFlags {
   staleMinutes?: number;
 }
 
+interface ArchiveFlags {
+  threadId?: string;
+  completed?: boolean;
+  yes?: boolean;
+  dryRun?: boolean;
+}
+
 function parseLogFlags(args: string[]): LogFlags {
   const flags: LogFlags = {};
   for (let i = 0; i < args.length; i++) {
@@ -303,6 +311,35 @@ function parseStatusFlags(args: string[]): StatusFlags {
         break;
       default:
         throw new Error(`Unknown flag for status command: ${arg}`);
+    }
+  }
+  return flags;
+}
+
+function parseArchiveFlags(args: string[]): ArchiveFlags {
+  const flags: ArchiveFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+    switch (arg) {
+      case '--thread':
+        if (!next) {
+          throw new Error('--thread flag requires a value');
+        }
+        flags.threadId = next;
+        i++;
+        break;
+      case '--completed':
+        flags.completed = true;
+        break;
+      case '--yes':
+        flags.yes = true;
+        break;
+      case '--dry-run':
+        flags.dryRun = true;
+        break;
+      default:
+        throw new Error(`Unknown flag for archive command: ${arg}`);
     }
   }
   return flags;
@@ -401,6 +438,7 @@ function printHelp(): void {
     '  log             Print the stored log for a thread (no Codex call)',
     '  status          Summarize the latest activity for a thread',
     '  watch           Continuously peek a thread until interrupted',
+    '  archive         Move completed thread logs/state into archive',
     '  label           Attach or update a friendly label for a thread',
     '',
     'Options:',
@@ -434,6 +472,11 @@ function printHelp(): void {
   '    --tail <n>            Optional number of most recent entries to show',
   '    --raw                 Output raw NDJSON lines',
   '    --stale-minutes <n>   Override idle threshold for follow-up suggestion (default 15)',
+  '  archive flags:',
+  '    --thread <id>         Archive a specific thread',
+  '    --completed           Archive all completed threads (per controller)',
+  '    --yes                 Required to actually archive (safety guard)',
+  '    --dry-run             Show what would archive without moving files',
   '  watch flags:',
   '    --thread <id>         Target thread to watch (required)',
   '    --interval-ms <n>     Interval between peeks (default 5000)',
@@ -600,6 +643,22 @@ async function run(): Promise<void> {
           rootDir,
           threadId: flags.threadId ?? '',
           label: flags.label ?? '',
+          controllerId,
+        });
+      } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      break;
+    case 'archive':
+      try {
+        const flags = parseArchiveFlags(rest);
+        await archiveCommand({
+          rootDir,
+          threadId: flags.threadId,
+          completed: Boolean(flags.completed),
+          yes: Boolean(flags.yes),
+          dryRun: Boolean(flags.dryRun),
           controllerId,
         });
       } catch (error) {
