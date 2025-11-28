@@ -1,0 +1,130 @@
+OpenAI Codex v0.63.0 (research preview)
+--------
+workdir: /private/tmp/codex-realworld
+model: gpt-5.1-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: medium
+reasoning summaries: auto
+session id: 019acc57-e978-7982-816a-c68082d62f2a
+--------
+user
+You are Jesse's main Codex session verifying that the codex-subagent CLI works from a clean project directory (/tmp/codex-realworld).
+
+Follow this procedure exactly:
+1. Use the Bash tool once to run the following script verbatim and show its stdout/stderr.
+```bash
+set -euo pipefail
+ls -a
+pwd
+cat <<'JSON' | ~/.codex/skills/using-subagents-as-codex/codex-subagent start --controller-id realworld-test --json -
+{
+  "role": "engineer",
+  "policy": "workspace-write",
+  "prompt": "You are Codex Subagent Beta verifying that codex-subagent works end-to-end. Work only inside /tmp/codex-realworld/project. You already have permission to run `git init` here if you want version control. Tasks: 1) Create a README.md describing this smoke test. 2) Add a file named run.log with today's date on the first line and 'subagent smoke' on the second. 3) Return a concise summary plus the first few lines of README.md. Stop after completing those steps.",
+  "cwd": "/tmp/codex-realworld/project",
+  "label": "realworld-smoke"
+}
+JSON
+sleep 5
+ls -R .codex-subagent || echo "state dir not ready yet"
+```
+2. After the script completes, summarize the results in plain text, including the thread id printed by codex-subagent (if any) or mention that start detached without printing an id.
+3. Do not launch any additional tasks beyond the single codex-subagent start.
+
+If any command fails, report the failure and stop.
+
+mcp: ios starting
+mcp: zotero starting
+mcp: zotero ready
+mcp: ios ready
+mcp startup: ready: zotero, ios
+
+thinking
+**Preparing to execute Bash script verbatim**
+exec
+/bin/zsh -lc "set -euo pipefail
+ls -a
+pwd
+cat <<'JSON' | ~/.codex/skills/using-subagents-as-codex/codex-subagent start --controller-id realworld-test --json -
+{
+  \"role\": \"engineer\",
+  \"policy\": \"workspace-write\",
+  \"prompt\": \"You are Codex Subagent Beta verifying that codex-subagent works end-to-end. Work only inside /tmp/codex-realworld/project. You already have permission to run "'`git init` here if you want version control. Tasks: 1) Create a README.md describing this smoke test. 2) Add a file named run.log with today'"'s date on the first line and 'subagent smoke' on the second. 3) Return a concise summary plus the first few lines of README.md. Stop after completing those steps.\",
+  \"cwd\": \"/tmp/codex-realworld/project\",
+  \"label\": \"realworld-smoke\"
+}
+JSON
+sleep 5
+ls -R .codex-subagent || echo \"state dir not ready yet\"
+" in /private/tmp/codex-realworld succeeded in 5.12s:
+.
+..
+.codex-subagent
+project
+/private/tmp/codex-realworld
+Subagent launched in the background; Codex may run for minutes or hours. Use `codex-subagent list`, `peek`, or `log` later to inspect results.
+archive
+logs
+state
+
+.codex-subagent/archive:
+
+.codex-subagent/logs:
+019acc56-ae90-7110-8164-d4576f8b6522.ndjson
+
+.codex-subagent/state:
+threads.json
+
+thinking
+**Preparing final plain-text summary with output snippet**
+codex
+Jesse, here’s the script output:
+
+```
+.
+..
+.codex-subagent
+project
+/private/tmp/codex-realworld
+Subagent launched in the background; Codex may run for minutes or hours. Use `codex-subagent list`, `peek`, or `log` later to inspect results.
+archive
+logs
+state
+
+.codex-subagent/archive:
+
+.codex-subagent/logs:
+019acc56-ae90-7110-8164-d4576f8b6522.ndjson
+
+.codex-subagent/state:
+threads.json
+```
+
+Summary: command ran cleanly in `/private/tmp/codex-realworld`, started the `codex-subagent` controller (`realworld-test`) in the background without printing a thread id (only the detached-launch notice), slept 5 s, then listed the `.codex-subagent` directory showing `archive/`, `logs/019acc56-ae90-7110-8164-d4576f8b6522.ndjson`, and `state/threads.json`. No additional tasks were launched.
+tokens used
+13,325
+Jesse, here’s the script output:
+
+```
+.
+..
+.codex-subagent
+project
+/private/tmp/codex-realworld
+Subagent launched in the background; Codex may run for minutes or hours. Use `codex-subagent list`, `peek`, or `log` later to inspect results.
+archive
+logs
+state
+
+.codex-subagent/archive:
+
+.codex-subagent/logs:
+019acc56-ae90-7110-8164-d4576f8b6522.ndjson
+
+.codex-subagent/state:
+threads.json
+```
+
+Summary: command ran cleanly in `/private/tmp/codex-realworld`, started the `codex-subagent` controller (`realworld-test`) in the background without printing a thread id (only the detached-launch notice), slept 5 s, then listed the `.codex-subagent` directory showing `archive/`, `logs/019acc56-ae90-7110-8164-d4576f8b6522.ndjson`, and `state/threads.json`. No additional tasks were launched.

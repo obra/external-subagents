@@ -4,7 +4,7 @@ This doc captures the recommended flow for spinning up subagents via `codex-suba
 
 ## 1. Start a Thread
 
-Install (or reinstall) via `npm install --prefix ~/.codex/skills/using-subagents-as-codex --production .`. That command creates a wrapper script named `~/.codex/skills/using-subagents-as-codex/codex-subagent` that dynamically imports the packaged CLI from `node_modules/codex-subagent-cli/dist/bin/codex-subagent.js`, so dependency paths remain stable.
+Install (or reinstall) via `npm install --prefix ~/.codex/skills/using-subagents-as-codex --production .`. That command creates a wrapper script named `~/.codex/skills/using-subagents-as-codex/codex-subagent` that dynamically imports the packaged CLI from `node_modules/codex-subagent-cli/dist/codex-subagent.js`, so dependency paths remain stable.
 
 ```
 ~/.codex/skills/using-subagents-as-codex/codex-subagent \
@@ -149,6 +149,33 @@ npm run build
 ```
 
 Capture a manual smoke log (`start`, `send`, `peek`, `log`, `watch`) to document real-world behavior.
+
+## Real-World Smoke Test (2025-11-28)
+
+To confirm the single-file bundle works from a pristine Codex session, we ran:
+
+```
+codex exec --dangerously-bypass-approvals-and-sandbox \
+  --skip-git-repo-check \
+  --cd /tmp/codex-realworld -
+```
+
+The prompt asked Codex to execute a short Bash script that:
+
+1. Launched `~/.codex/skills/using-subagents-as-codex/codex-subagent start --controller-id realworld-test --json -` with an inline JSON payload (`role`/`policy` plus prompt/cwd/label).
+2. Slept 5 seconds so the detached worker could create `.codex-subagent/state`.
+3. Listed `.codex-subagent/` to prove the registry/log files exist.
+
+Results:
+
+- Transcript is saved at `docs/examples/2025-11-28-realworld-smoke.log`.
+- A new thread (`019acc56-ae90-7110-8164-d4576f8b6522`, label `realworld-smoke`) appeared under `/tmp/codex-realworld/.codex-subagent`.
+- Running `node dist/codex-subagent.js list --root /tmp/codex-realworld/.codex-subagent --controller-id realworld-test` showed the thread as `stopped · updated just now`.
+- `peek` and `log --tail 5` replayed the assistant’s final turn without resuming Codex, and `status` surfaced the same message plus idle timing.
+- Because detached launches don’t print thread IDs, always pass `--controller-id <label>` during tests so later commands can target the right registry entries.
+- When scripting verification, insert a brief `sleep` (or use `codex-subagent wait`) before inspecting `.codex-subagent`—the worker needs a moment to write state/log files.
+
+Use this pattern whenever we need a reproducible, real-world smoke to accompany feature changes.
 
 ## Appendix: Detached Execution Internals
 

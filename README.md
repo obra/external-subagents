@@ -33,7 +33,7 @@ Afterwards, invoke the CLI through the binary that `npm` drops inside the skill 
 
 This absolute path works no matter which repository the parent Codex session is using.
 
-> Why this path? The installer drops a tiny Node wrapper named `codex-subagent` beside the skill. That script simply `import()`s `node_modules/codex-subagent-cli/dist/bin/codex-subagent.js`, so all real dependencies stay inside `node_modules` while the wrapper remains stable and executable. If you ever delete or move the script, rerun the install command above to recreate it.
+> Why this path? The installer drops a tiny Node wrapper named `codex-subagent` beside the skill. That script simply `import()`s `node_modules/codex-subagent-cli/dist/codex-subagent.js`, so all real dependencies stay inside `node_modules` while the wrapper remains stable and executable. If you ever delete or move the script, rerun the install command above to recreate it.
 
 ### Global flags
 
