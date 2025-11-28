@@ -17,3 +17,4 @@
 - [x] Improve startup diagnostics so failed `start`/`send` attempts surface actionable errors (log runner stderr to `.codex-subagent/state/launch-errors`, show `NOT RUNNING` in `list`, warn via `Launch diagnostics` when a launch never progressed past start).
 - [x] Re-run the full Codex real-world test (with sandbox disabled) to confirm the new single-binary workflow writes `.codex-subagent/state/threads.json`, and capture the transcript for docs. (See `docs/examples/2025-11-28-realworld-smoke.log` for the latest run.)
 - [x] Document the hidden `worker-start` / `worker-send` subcommands in developer notes so future maintainers understand how detached launches re-enter the CLI.
+- [ ] Teach `codex-subagent wait` to observe pending launches (via the launch registry) so it can block even before a thread ID is registered, preventing the “No matching threads found” race we hit during the live codex run.
