@@ -40,20 +40,22 @@ function captureOutput() {
 }
 
 describe('list command', () => {
-  it('prints thread metadata from the registry file', async () => {
+  it('prints labels, statuses, and relative times with running threads first', async () => {
     const root = await createStateFixture();
     const { stdout, output } = captureOutput();
     await listCommand({
       rootDir: path.join(root, '.codex-subagent'),
       stdout,
       controllerId: 'controller-one',
+      now: () => new Date('2025-11-26T12:05:00Z').valueOf(),
     });
 
     const text = output.join('');
     expect(text).toContain('Found 1 thread');
     expect(text).toContain('T-123');
-    expect(text).toContain('researcher');
-    expect(text).toContain('running');
+    expect(text).toContain('running · researcher');
+    expect(text).toContain('updated 5m ago');
+    expect(text).not.toContain('unknown');
   });
 
   it('informs the user when no threads exist', async () => {
@@ -105,5 +107,38 @@ describe('list command', () => {
     expect(text).toContain('Found 1 thread');
     expect(text).toContain('T-123');
     expect(text).not.toContain('T-OTHER');
+  });
+
+  it('includes labels in output when present', async () => {
+    const root = await createStateFixture();
+    const threadsFile = path.join(root, '.codex-subagent', 'state', 'threads.json');
+    const data = {
+      'RUNNING': {
+        ...sampleThread,
+        thread_id: 'RUNNING',
+        status: 'running',
+        label: 'Task 3 – log summaries',
+        updated_at: new Date().toISOString(),
+      },
+      'COMPLETE': {
+        ...sampleThread,
+        thread_id: 'COMPLETE',
+        status: 'completed',
+        updated_at: new Date().toISOString(),
+      },
+    };
+    await writeFile(threadsFile, JSON.stringify(data, null, 2));
+
+    const { stdout, output } = captureOutput();
+    await listCommand({
+      rootDir: path.join(root, '.codex-subagent'),
+      stdout,
+      controllerId: 'controller-one',
+    });
+
+    const text = output.join('');
+    expect(text.indexOf('RUNNING (Task 3 – log summaries)')).toBeLessThan(
+      text.indexOf('COMPLETE')
+    );
   });
 });

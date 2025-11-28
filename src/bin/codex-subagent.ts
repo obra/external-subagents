@@ -6,6 +6,8 @@ import { sendCommand } from '../commands/send.ts';
 import { peekCommand } from '../commands/peek.ts';
 import { logCommand } from '../commands/log.ts';
 import { watchCommand } from '../commands/watch.ts';
+import { statusCommand } from '../commands/status.ts';
+import { labelCommand } from '../commands/label.ts';
 import { RegistryLoadError } from '../lib/registry.ts';
 import { getControllerId } from '../lib/controller-id.ts';
 
@@ -58,6 +60,8 @@ interface StartFlags {
   promptFile?: string;
   outputLastPath?: string;
   wait?: boolean;
+  workingDir?: string;
+  label?: string;
 }
 
 function parseStartFlags(args: string[]): StartFlags {
@@ -94,6 +98,20 @@ function parseStartFlags(args: string[]): StartFlags {
         flags.outputLastPath = path.resolve(next);
         i++;
         break;
+      case '--cwd':
+        if (!next) {
+          throw new Error('--cwd flag requires a path');
+        }
+        flags.workingDir = path.resolve(next);
+        i++;
+        break;
+      case '--label':
+        if (!next) {
+          throw new Error('--label flag requires a value');
+        }
+        flags.label = next;
+        i++;
+        break;
       case '--wait':
         flags.wait = true;
         break;
@@ -108,6 +126,8 @@ interface SendFlags {
   threadId?: string;
   promptFile?: string;
   outputLastPath?: string;
+  wait?: boolean;
+  workingDir?: string;
 }
 
 function parseSendFlags(args: string[]): SendFlags {
@@ -137,6 +157,16 @@ function parseSendFlags(args: string[]): SendFlags {
         flags.outputLastPath = path.resolve(next);
         i++;
         break;
+      case '--cwd':
+        if (!next) {
+          throw new Error('--cwd flag requires a path');
+        }
+        flags.workingDir = path.resolve(next);
+        i++;
+        break;
+      case '--wait':
+        flags.wait = true;
+        break;
       default:
         throw new Error(`Unknown flag for send command: ${arg}`);
     }
@@ -147,6 +177,7 @@ function parseSendFlags(args: string[]): SendFlags {
 interface PeekFlags {
   threadId?: string;
   outputLastPath?: string;
+  verbose?: boolean;
 }
 
 function parsePeekFlags(args: string[]): PeekFlags {
@@ -169,6 +200,9 @@ function parsePeekFlags(args: string[]): PeekFlags {
         flags.outputLastPath = path.resolve(next);
         i++;
         break;
+      case '--verbose':
+        flags.verbose = true;
+        break;
       default:
         throw new Error(`Unknown flag for peek command: ${arg}`);
     }
@@ -180,6 +214,19 @@ interface LogFlags {
   threadId?: string;
   tail?: number;
   raw?: boolean;
+  verbose?: boolean;
+}
+
+interface LabelFlags {
+  threadId?: string;
+  label?: string;
+}
+
+interface StatusFlags {
+  threadId?: string;
+  tail?: number;
+  raw?: boolean;
+  staleMinutes?: number;
 }
 
 function parseLogFlags(args: string[]): LogFlags {
@@ -208,8 +255,81 @@ function parseLogFlags(args: string[]): LogFlags {
       case '--raw':
         flags.raw = true;
         break;
+      case '--verbose':
+        flags.verbose = true;
+        break;
       default:
         throw new Error(`Unknown flag for log command: ${arg}`);
+    }
+  }
+  return flags;
+}
+
+function parseStatusFlags(args: string[]): StatusFlags {
+  const flags: StatusFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+    switch (arg) {
+      case '--thread':
+        if (!next) {
+          throw new Error('--thread flag requires a value');
+        }
+        flags.threadId = next;
+        i++;
+        break;
+      case '--tail':
+        if (!next) {
+          throw new Error('--tail flag requires a value');
+        }
+        flags.tail = Number(next);
+        if (Number.isNaN(flags.tail) || flags.tail! < 1) {
+          throw new Error('--tail must be a positive integer');
+        }
+        i++;
+        break;
+      case '--raw':
+        flags.raw = true;
+        break;
+      case '--stale-minutes':
+        if (!next) {
+          throw new Error('--stale-minutes flag requires a value');
+        }
+        flags.staleMinutes = Number(next);
+        if (Number.isNaN(flags.staleMinutes) || flags.staleMinutes! <= 0) {
+          throw new Error('--stale-minutes must be greater than 0');
+        }
+        i++;
+        break;
+      default:
+        throw new Error(`Unknown flag for status command: ${arg}`);
+    }
+  }
+  return flags;
+}
+
+function parseLabelFlags(args: string[]): LabelFlags {
+  const flags: LabelFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+    switch (arg) {
+      case '--thread':
+        if (!next) {
+          throw new Error('--thread flag requires a value');
+        }
+        flags.threadId = next;
+        i++;
+        break;
+      case '--label':
+        if (!next) {
+          throw new Error('--label flag requires a value');
+        }
+        flags.label = next;
+        i++;
+        break;
+      default:
+        throw new Error(`Unknown flag for label command: ${arg}`);
     }
   }
   return flags;
@@ -219,6 +339,7 @@ interface WatchFlags {
   threadId?: string;
   intervalMs?: number;
   outputLastPath?: string;
+  durationMs?: number;
 }
 
 function parseWatchFlags(args: string[]): WatchFlags {
@@ -251,6 +372,16 @@ function parseWatchFlags(args: string[]): WatchFlags {
         flags.outputLastPath = path.resolve(next);
         i++;
         break;
+      case '--duration-ms':
+        if (!next) {
+          throw new Error('--duration-ms flag requires a value');
+        }
+        flags.durationMs = Number(next);
+        if (Number.isNaN(flags.durationMs) || flags.durationMs! < 1) {
+          throw new Error('--duration-ms must be a positive integer');
+        }
+        i++;
+        break;
       default:
         throw new Error(`Unknown flag for watch command: ${arg}`);
     }
@@ -268,32 +399,65 @@ function printHelp(): void {
     '  send            Send a new prompt to an existing thread (resume)',
     '  peek            Show the newest unseen assistant message for a thread',
     '  log             Print the stored log for a thread (no Codex call)',
+    '  status          Summarize the latest activity for a thread',
     '  watch           Continuously peek a thread until interrupted',
+    '  label           Attach or update a friendly label for a thread',
     '',
     'Options:',
     '  --root <path>          Override the .codex-subagent root directory',
     '  --controller-id <id>   Override auto-detected controller session ID',
-    '  start flags:',
-    '    --role <name>         Required Codex role (e.g., researcher)',
-    '    --policy <policy>     Required policy (never "allow everything")',
-    '    --prompt-file <path>  Prompt contents for the subagent',
-    '    --output-last <path>  Optional file for last message text',
-    '    --wait                Block until Codex finishes (default: detach)',
-    '  send flags:',
-    '    --thread <id>         Target thread to resume (required)',
-    '    --prompt-file <path>  Prompt file for the next turn',
-    '    --output-last <path>  Optional file for last message text',
-    '  peek flags:',
-    '    --thread <id>         Target thread to inspect (required)',
-    '    --output-last <path>  Optional file for last message text',
-    '  log flags:',
-    '    --thread <id>         Target thread to inspect (required)',
-    '    --tail <n>            Optional number of most recent entries to show',
-    '    --raw                 Output raw NDJSON lines',
-    '  watch flags:',
-    '    --thread <id>         Target thread to watch (required)',
-    '    --interval-ms <n>     Interval between peeks (default 5000)',
-    '    --output-last <path>  Optional file for last message text',
+  '  start flags:',
+  '    --role <name>         Required Codex role (e.g., researcher)',
+  '    --policy <policy>     Required policy (never "allow everything")',
+  '    --prompt-file <path>  Prompt contents for the subagent',
+  '    --output-last <path>  Optional file for last message text',
+  '    --cwd <path>          Optional working directory instruction for the subagent',
+  '    --label <text>        Optional friendly label stored with the thread',
+  '    --wait                Block until Codex finishes (default: detach)',
+  '  send flags:',
+  '    --thread <id>         Target thread to resume (required)',
+  '    --prompt-file <path>  Prompt file for the next turn',
+  '    --output-last <path>  Optional file for last message text',
+  '    --cwd <path>          Optional working directory instruction for the subagent',
+  '    --wait                Block until Codex finishes (default: detach)',
+  '  peek flags:',
+  '    --thread <id>         Target thread to inspect (required)',
+  '    --output-last <path>  Optional file for last message text',
+  '    --verbose             Include last-activity metadata even when no updates',
+  '  log flags:',
+  '    --thread <id>         Target thread to inspect (required)',
+  '    --tail <n>            Optional number of most recent entries to show',
+  '    --raw                 Output raw NDJSON lines',
+  '    --verbose             Append last-activity metadata',
+  '  status flags:',
+  '    --thread <id>         Target thread to inspect (required)',
+  '    --tail <n>            Optional number of most recent entries to show',
+  '    --raw                 Output raw NDJSON lines',
+  '    --stale-minutes <n>   Override idle threshold for follow-up suggestion (default 15)',
+  '  watch flags:',
+  '    --thread <id>         Target thread to watch (required)',
+  '    --interval-ms <n>     Interval between peeks (default 5000)',
+  '    --output-last <path>  Optional file for last message text',
+  '    --duration-ms <n>     Optional max runtime before exiting cleanly',
+  '  label flags:',
+  '    --thread <id>         Target thread to label (required)',
+  '    --label <text>        Friendly label text (empty string clears it)',
+  '',
+  'Examples:',
+  '  # Launch a detached researcher subagent',
+  '  codex-subagent start --role researcher --policy workspace-write --prompt-file task.txt',
+  '  # Resume a thread but wait for completion',
+  '  codex-subagent send --thread 019... --prompt-file followup.txt --wait',
+  '  # Peek the most recent assistant turn without resuming Codex',
+  '  codex-subagent peek --thread 019...',
+  '  # Watch for new turns for up to 60 seconds, then exit cleanly',
+  '  codex-subagent watch --thread 019... --duration-ms 60000',
+  '  # Give a friendly label to a thread',
+  '  codex-subagent label --thread 019... --label "Task 3 – log summaries"',
+  '',
+  'Notes:',
+  '  start/send run detached unless you pass --wait.',
+  '  watch never resumes Codex; it only replays peek output. Prefer peek/log when you just need the latest turn.',
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
 }
@@ -331,6 +495,8 @@ async function run(): Promise<void> {
           outputLastPath: flags.outputLastPath,
           wait: Boolean(flags.wait),
           controllerId,
+          workingDir: flags.workingDir,
+          label: flags.label,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -346,6 +512,8 @@ async function run(): Promise<void> {
           promptFile: flags.promptFile ?? '',
           outputLastPath: flags.outputLastPath,
           controllerId,
+          wait: Boolean(flags.wait),
+          workingDir: flags.workingDir,
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -359,6 +527,7 @@ async function run(): Promise<void> {
           rootDir,
           threadId: flags.threadId ?? '',
           outputLastPath: flags.outputLastPath,
+          verbose: Boolean(flags.verbose),
           controllerId,
         });
       } catch (error) {
@@ -374,6 +543,23 @@ async function run(): Promise<void> {
           threadId: flags.threadId ?? '',
           tail: flags.tail,
           raw: Boolean(flags.raw),
+          verbose: Boolean(flags.verbose),
+          controllerId,
+        });
+      } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      break;
+    case 'status':
+      try {
+        const flags = parseStatusFlags(rest);
+        await statusCommand({
+          rootDir,
+          threadId: flags.threadId ?? '',
+          tail: flags.tail,
+          raw: Boolean(flags.raw),
+          staleMinutes: flags.staleMinutes,
           controllerId,
         });
       } catch (error) {
@@ -395,12 +581,27 @@ async function run(): Promise<void> {
             threadId: flags.threadId ?? '',
             intervalMs: flags.intervalMs,
             outputLastPath: flags.outputLastPath,
+            durationMs: flags.durationMs,
             signal: controller.signal,
             controllerId,
           });
         } finally {
           process.off('SIGINT', handleSigint);
         }
+      } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      break;
+    case 'label':
+      try {
+        const flags = parseLabelFlags(rest);
+        await labelCommand({
+          rootDir,
+          threadId: flags.threadId ?? '',
+          label: flags.label ?? '',
+          controllerId,
+        });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
         process.exitCode = 1;
