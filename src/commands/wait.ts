@@ -1,5 +1,6 @@
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { stat } from 'node:fs/promises';
 import { Writable } from 'node:stream';
 import { Paths } from '../lib/paths.ts';
 import { Registry, ThreadMetadata } from '../lib/registry.ts';
@@ -254,16 +255,32 @@ export async function waitCommand(options: WaitCommandOptions): Promise<void> {
     for (const threadId of Array.from(pending)) {
       const entry = snapshotMap.get(threadId);
       if (!entry) {
-        // Thread might have been archived or not yet created; treat absence as completed.
-        pending.delete(threadId);
-        stdout.write(
-          `- ${formatThreadLabel(selection.lookup.get(threadId), threadId)} no longer in registry (treated as stopped)\n`
-        );
-        if (options.followLast) {
-          const summary = await getLastAssistantSummary(paths, threadId);
-          if (summary) {
-            stdout.write(`  Last assistant: ${summary}\n`);
+        // Check if thread was archived
+        const archivePath = paths.archivedLogFile(threadId);
+        let wasArchived = false;
+        try {
+          await stat(archivePath);
+          wasArchived = true;
+        } catch {
+          // Not archived
+        }
+
+        if (wasArchived) {
+          pending.delete(threadId);
+          stdout.write(
+            `- ${formatThreadLabel(selection.lookup.get(threadId), threadId)} was archived\n`
+          );
+          if (options.followLast) {
+            const summary = await getLastAssistantSummary(paths, threadId);
+            if (summary) {
+              stdout.write(`  Last assistant: ${summary}\n`);
+            }
           }
+        } else {
+          throw new Error(
+            `Thread ${threadId} disappeared from registry unexpectedly. ` +
+            `This may indicate a bug or manual registry modification.`
+          );
         }
         continue;
       }

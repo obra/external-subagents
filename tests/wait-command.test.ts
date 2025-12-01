@@ -220,4 +220,46 @@ describe('wait command', () => {
     expect(text).toContain('All threads stopped');
     expect(sleep).toHaveBeenCalled();
   });
+
+  it('throws error when thread disappears unexpectedly', async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-wait-missing-'));
+    const codexRoot = path.join(workspace, '.codex-subagent');
+    await writeRegistry(codexRoot, {
+      'vanishing-thread': {
+        thread_id: 'vanishing-thread',
+        role: 'worker',
+        policy: 'workspace-write',
+        status: 'running',
+        updated_at: '2025-11-28T09:00:00Z',
+        controller_id: 'test-controller',
+      },
+    });
+
+    let pollCount = 0;
+    const sleep = vi.fn(async () => {
+      pollCount++;
+      if (pollCount === 2) {
+        // Thread disappears during wait (not archived, just gone)
+        await writeRegistry(codexRoot, {});
+      }
+      await new Promise((r) => setTimeout(r, 10));
+      return true;
+    });
+
+    const now = vi.fn();
+    now.mockReturnValueOnce(0);
+    now.mockReturnValue(5_000);
+
+    await expect(
+      waitCommand({
+        rootDir: codexRoot,
+        threadIds: ['vanishing-thread'],
+        controllerId: 'test-controller',
+        intervalMs: 50,
+        timeoutMs: 10_000,
+        sleep,
+        now,
+      })
+    ).rejects.toThrow(/disappeared|missing|unexpectedly/i);
+  });
 });
