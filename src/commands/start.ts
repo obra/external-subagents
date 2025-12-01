@@ -10,6 +10,7 @@ import { StartManifest } from '../lib/start-manifest.ts';
 import { composePrompt } from '../lib/prompt.ts';
 import { LaunchRegistry } from '../lib/launch-registry.ts';
 import { Paths } from '../lib/paths.ts';
+import { validateSpawnedWorker } from '../lib/spawn-validation.ts';
 
 export interface StartCommandOptions {
   rootDir?: string;
@@ -141,7 +142,7 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     launchId = attempt.id;
   }
 
-  launchDetachedWorker({
+  await launchDetachedWorker({
     rootDir: options.rootDir,
     role,
     policy: resolvedPolicy,
@@ -154,6 +155,7 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     persona,
     cliPath: options.cliPath,
     launchId,
+    launchRegistry,
   });
   stdout.write(
     'Subagent launched in the background; Codex may run for minutes or hours. Use `codex-subagent list`, `peek`, or `log` later to inspect results.\n'
@@ -221,7 +223,7 @@ async function runManifestStart(args: {
         role: task.role,
         policy: resolvedPolicy,
       });
-      launchDetachedWorker({
+      await launchDetachedWorker({
         rootDir: args.baseOptions.rootDir,
         role: task.role,
         policy: resolvedPolicy,
@@ -234,6 +236,7 @@ async function runManifestStart(args: {
         persona,
         cliPath: args.baseOptions.cliPath,
         launchId: attempt.id,
+        launchRegistry: args.launchRegistry,
       });
       results.push({
         index,
@@ -363,9 +366,10 @@ interface DetachedWorkerOptions {
   persona?: PersonaRuntime;
   cliPath?: string;
   launchId?: string;
+  launchRegistry?: LaunchRegistry;
 }
 
-function launchDetachedWorker(options: DetachedWorkerOptions): void {
+async function launchDetachedWorker(options: DetachedWorkerOptions): Promise<void> {
   const cliPath = resolveCliPath(options.cliPath);
   const payloadData = {
     rootDir: options.rootDir ? path.resolve(options.rootDir) : undefined,
@@ -387,6 +391,16 @@ function launchDetachedWorker(options: DetachedWorkerOptions): void {
     stdio: 'ignore',
   });
   child.unref();
+
+  const validation = await validateSpawnedWorker(child, 500);
+  if (!validation.healthy) {
+    if (options.launchRegistry && options.launchId) {
+      await options.launchRegistry.markFailure(options.launchId, {
+        error: new Error(validation.error ?? 'Worker failed to start'),
+      });
+    }
+    throw new Error(`Detached worker failed to start: ${validation.error}`);
+  }
 }
 
 function resolveCliPath(overridePath?: string): string {

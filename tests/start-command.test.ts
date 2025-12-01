@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 const childProcessMocks = vi.hoisted(() => ({
   spawn: vi.fn(() => ({
     unref: vi.fn(),
+    on: vi.fn(),
+    removeListener: vi.fn(),
   })),
 }));
 
@@ -40,6 +42,8 @@ describe('start command', () => {
     spawnMock.mockReset();
     spawnMock.mockImplementation(() => ({
       unref: vi.fn(),
+      on: vi.fn(),
+      removeListener: vi.fn(),
     }));
   });
 
