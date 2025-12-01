@@ -1,9 +1,12 @@
-import { Registry, ThreadMetadata } from './registry.ts';
+import type { Registry } from './registry.ts';
+import { ThreadMetadata } from './registry.ts';
 
+// Note: registry param kept for API compatibility, may be used in future for explicit claim
 export async function assertThreadOwnership(
   thread: ThreadMetadata | undefined,
   controllerId: string,
-  registry: Registry
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _registry: Registry
 ): Promise<ThreadMetadata> {
   if (!thread) {
     throw new Error('Thread not found');

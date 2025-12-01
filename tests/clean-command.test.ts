@@ -32,7 +32,7 @@ describe('clean command', () => {
     const newFile = path.join(newThreadDir, 'log.ndjson');
     await writeFile(newFile, 'recent content');
 
-    const { stdout, output } = captureOutput();
+    const { stdout } = captureOutput();
     await cleanCommand({
       rootDir: paths.root,
       olderThanDays: 30,

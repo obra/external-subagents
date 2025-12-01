@@ -60,4 +60,24 @@ describe('Registry (TypeScript)', () => {
     expect(again?.policy).toBe('research-readonly');
     expect(again?.last_message_id).toBe('msg-new');
   });
+
+  it('handles concurrent upserts without data loss', async () => {
+    const paths = await createPaths();
+    await paths.ensure();
+    const registry = new Registry(paths);
+
+    // Launch concurrent upserts
+    const promises = Array.from({ length: 10 }, (_, i) =>
+      registry.upsert({
+        thread_id: `thread-${i}`,
+        role: 'worker',
+        status: 'running',
+      })
+    );
+
+    await Promise.all(promises);
+
+    const threads = await registry.listThreads();
+    expect(threads.length).toBe(10);
+  });
 });
