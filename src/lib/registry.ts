@@ -2,6 +2,7 @@ import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Paths } from './paths.ts';
+import { acquireLock, releaseLock } from './file-lock.ts';
 
 export class RegistryLoadError extends Error {
   readonly cause?: unknown;
@@ -55,19 +56,22 @@ export class Registry {
     if (!threadId) {
       throw new Error('thread_id is required');
     }
-    const data = await this.readAll();
-    const entry: ThreadMetadata = {
-      ...data[threadId],
-      ...thread,
-      thread_id: threadId,
-      updated_at: thread.updated_at ?? new Date().toISOString(),
-    };
-    if (!entry.controller_id && thread.controller_id) {
-      entry.controller_id = thread.controller_id;
-    }
-    data[threadId] = entry;
-    await this.writeAll(data);
-    return entry;
+
+    return this.withLock(async () => {
+      const data = await this.readAll();
+      const entry: ThreadMetadata = {
+        ...data[threadId],
+        ...thread,
+        thread_id: threadId,
+        updated_at: thread.updated_at ?? new Date().toISOString(),
+      };
+      if (!entry.controller_id && thread.controller_id) {
+        entry.controller_id = thread.controller_id;
+      }
+      data[threadId] = entry;
+      await this.writeAllUnlocked(data);
+      return entry;
+    });
   }
 
   async updateThread(
@@ -78,22 +82,25 @@ export class Registry {
     if (!trimmed) {
       throw new Error('thread_id is required');
     }
-    const data = await this.readAll();
-    const existing = data[trimmed];
-    if (!existing) {
-      throw new Error(`Thread ${threadId} not found in registry`);
-    }
 
-    const entry: ThreadMetadata = {
-      ...existing,
-      ...updates,
-      thread_id: trimmed,
-      updated_at: updates.updated_at ?? new Date().toISOString(),
-    };
+    return this.withLock(async () => {
+      const data = await this.readAll();
+      const existing = data[trimmed];
+      if (!existing) {
+        throw new Error(`Thread ${threadId} not found in registry`);
+      }
 
-    data[trimmed] = entry;
-    await this.writeAll(data);
-    return entry;
+      const entry: ThreadMetadata = {
+        ...existing,
+        ...updates,
+        thread_id: trimmed,
+        updated_at: updates.updated_at ?? new Date().toISOString(),
+      };
+
+      data[trimmed] = entry;
+      await this.writeAllUnlocked(data);
+      return entry;
+    });
   }
 
   async remove(threadId: string): Promise<void> {
@@ -101,12 +108,25 @@ export class Registry {
     if (!trimmed) {
       throw new Error('thread_id is required');
     }
-    const data = await this.readAll();
-    if (!data[trimmed]) {
-      return;
+
+    await this.withLock(async () => {
+      const data = await this.readAll();
+      if (!data[trimmed]) {
+        return;
+      }
+      delete data[trimmed];
+      await this.writeAllUnlocked(data);
+    });
+  }
+
+  private async withLock<T>(operation: () => Promise<T>): Promise<T> {
+    const lockPath = `${this.paths.threadsFile}.lock`;
+    const lock = await acquireLock(lockPath);
+    try {
+      return await operation();
+    } finally {
+      await releaseLock(lock);
     }
-    delete data[trimmed];
-    await this.writeAll(data);
   }
 
   private async readAll(): Promise<ThreadMap> {
@@ -147,7 +167,7 @@ export class Registry {
     throw new RegistryLoadError('Registry file must contain an object map');
   }
 
-  private async writeAll(data: ThreadMap): Promise<void> {
+  private async writeAllUnlocked(data: ThreadMap): Promise<void> {
     await mkdir(path.dirname(this.paths.threadsFile), { recursive: true });
     const payload = JSON.stringify(data, null, 2);
     const tempFile = `${this.paths.threadsFile}.${randomUUID()}.tmp`;
