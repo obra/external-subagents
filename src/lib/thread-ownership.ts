@@ -14,9 +14,10 @@ export async function assertThreadOwnership(
   }
 
   if (!thread.controller_id) {
-    return await registry.updateThread(thread.thread_id, {
-      controller_id: controllerId,
-    });
+    throw new Error(
+      `Thread ${thread.thread_id} has no controller_id and cannot be auto-claimed. ` +
+      `Threads must have controller_id set at creation time.`
+    );
   }
 
   return thread;
