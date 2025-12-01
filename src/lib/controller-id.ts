@@ -37,14 +37,24 @@ function defaultPsReader(pid: number): ProcInfo | undefined {
   };
 }
 
+const MAX_TREE_DEPTH = 100;
+
 function findControllerPid(
   psReader: (pid: number) => ProcInfo | undefined,
   startPid: number
 ): string {
   const visited = new Set<number>();
   let currentPid = startPid;
+  let iterations = 0;
 
   while (!visited.has(currentPid)) {
+    if (iterations++ > MAX_TREE_DEPTH) {
+      throw new Error(
+        `Process tree walk exceeded maximum depth (${MAX_TREE_DEPTH}). ` +
+        `Possible cycle or unusually deep process hierarchy.`
+      );
+    }
+
     visited.add(currentPid);
     const info = psReader(currentPid);
     if (!info) {

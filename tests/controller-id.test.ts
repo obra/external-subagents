@@ -30,4 +30,23 @@ describe('controller id detection', () => {
     const id = getControllerId({ psReader: () => undefined });
     expect(id).toBe(String(process.pid));
   });
+
+  it('throws error if process tree walk exceeds max iterations', () => {
+    resetControllerIdCache();
+
+    let callCount = 0;
+    const cyclicPsReader = (pid: number) => {
+      callCount++;
+      // Return a valid process that always points to a different parent
+      // This creates an infinitely deep tree
+      return { pid, ppid: pid + 1, command: 'some-process' };
+    };
+
+    expect(() =>
+      getControllerId({ psReader: cyclicPsReader, startPid: 1 })
+    ).toThrow('exceeded maximum');
+
+    // Should have stopped well before 1000 iterations
+    expect(callCount).toBeLessThan(200);
+  });
 });
