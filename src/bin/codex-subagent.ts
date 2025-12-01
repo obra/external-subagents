@@ -383,6 +383,13 @@ function parseSendFlags(args: string[]): SendFlags {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
+
+    // Handle positional thread ID (first non-flag argument)
+    if (!arg.startsWith('-') && !flags.threadId) {
+      flags.threadId = arg;
+      continue;
+    }
+
     switch (arg) {
       case '-t':
       case '--thread':
@@ -458,6 +465,13 @@ function parsePeekFlags(args: string[]): PeekFlags {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
+
+    // Handle positional thread ID (first non-flag argument)
+    if (!arg.startsWith('-') && !flags.threadId) {
+      flags.threadId = arg;
+      continue;
+    }
+
     switch (arg) {
       case '-t':
       case '--thread':
@@ -571,6 +585,13 @@ function parseLogFlags(args: string[]): LogFlags {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
+
+    // Handle positional thread ID (first non-flag argument)
+    if (!arg.startsWith('-') && !flags.threadId) {
+      flags.threadId = arg;
+      continue;
+    }
+
     switch (arg) {
       case '-t':
       case '--thread':
@@ -609,6 +630,13 @@ function parseStatusFlags(args: string[]): StatusFlags {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
+
+    // Handle positional thread ID (first non-flag argument)
+    if (!arg.startsWith('-') && !flags.threadId) {
+      flags.threadId = arg;
+      continue;
+    }
+
     switch (arg) {
       case '-t':
       case '--thread':
@@ -654,6 +682,13 @@ function parseArchiveFlags(args: string[]): ArchiveFlags {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
+
+    // Handle positional thread ID (first non-flag argument)
+    if (!arg.startsWith('-') && !flags.threadId) {
+      flags.threadId = arg;
+      continue;
+    }
+
     switch (arg) {
       case '-t':
       case '--thread':
@@ -684,6 +719,13 @@ function parseLabelFlags(args: string[]): LabelFlags {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
+
+    // Handle positional thread ID (first non-flag argument)
+    if (!arg.startsWith('-') && !flags.threadId) {
+      flags.threadId = arg;
+      continue;
+    }
+
     switch (arg) {
       case '-t':
       case '--thread':
@@ -779,6 +821,13 @@ function parseWatchFlags(args: string[]): WatchFlags {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
+
+    // Handle positional thread ID (first non-flag argument)
+    if (!arg.startsWith('-') && !flags.threadId) {
+      flags.threadId = arg;
+      continue;
+    }
+
     switch (arg) {
       case '-t':
       case '--thread':
@@ -889,6 +938,7 @@ function printHelp(): void {
     '    --json <path|->            Alternative JSON input format (use - for stdin)',
     '    -w, --wait                 Block until Codex finishes (default: detach)',
     '  send flags:',
+    '    <thread-id>                Positional thread ID (alternative to --thread)',
     '    -t, --thread <id>          Target thread to resume (required)',
     '    -f, --prompt-file <path>   Prompt file for the next turn',
     '    --save-response <path>     Optional file for last message text',
@@ -897,30 +947,36 @@ function printHelp(): void {
     '    --json <path|->            Alternative JSON input format (use - for stdin)',
     '    -w, --wait                 Block until Codex finishes (default: detach)',
     '  peek flags:',
+    '    <thread-id>             Positional thread ID (alternative to --thread)',
     '    -t, --thread <id>       Target thread to inspect (required)',
     '    --save-response <path>  Optional file for last message text',
     '    --verbose               Include last-activity metadata even when no updates',
     '  log flags:',
+    '    <thread-id>        Positional thread ID (alternative to --thread)',
     '    -t, --thread <id>  Target thread to inspect (required)',
     '    --tail <n>         Optional number of most recent entries to show',
     '    --json             Output raw NDJSON lines',
     '    --verbose          Append last-activity metadata',
     '  status flags:',
+    '    <thread-id>          Positional thread ID (alternative to --thread)',
     '    -t, --thread <id>    Target thread to inspect (required)',
     '    --tail <n>           Optional number of most recent entries to show',
     '    --json               Output raw NDJSON lines',
     '    --stale-minutes <n>  Override idle threshold for follow-up suggestion (default 15)',
     '  archive flags:',
+    '    <thread-id>        Positional thread ID (alternative to --thread)',
     '    -t, --thread <id>  Archive a specific thread',
     '    --completed        Archive all completed threads (per controller)',
     '    --yes              Required to actually archive (safety guard)',
     '    --dry-run          Show what would archive without moving files',
     '  watch flags:',
+    '    <thread-id>             Positional thread ID (alternative to --thread)',
     '    -t, --thread <id>       Target thread to watch (required)',
     '    --interval-ms <n>       Interval between peeks (default 5000)',
     '    --save-response <path>  Optional file for last message text',
     '    --timeout-ms <n>        Optional max runtime before exiting cleanly',
     '  label flags:',
+    '    <thread-id>        Positional thread ID (alternative to --thread)',
     '    -t, --thread <id>  Target thread to label (required)',
     '    --label <text>     Friendly label text (empty string clears it)',
     '  wait flags:',
@@ -938,14 +994,16 @@ function printHelp(): void {
     'Examples:',
     '  # Launch a detached researcher subagent',
     '  codex-subagent start --role researcher --policy workspace-write --prompt-file task.txt',
-    '  # Resume a thread but wait for completion',
+    '  # Resume a thread but wait for completion (positional thread ID)',
+    '  codex-subagent send 019... --prompt-file followup.txt --wait',
+    '  # Or with explicit --thread flag (both work)',
     '  codex-subagent send --thread 019... --prompt-file followup.txt --wait',
     '  # Peek the most recent assistant turn without resuming Codex',
-    '  codex-subagent peek --thread 019...',
+    '  codex-subagent peek 019...',
     '  # Watch for new turns for up to 60 seconds, then exit cleanly',
-    '  codex-subagent watch --thread 019... --timeout-ms 60000',
+    '  codex-subagent watch 019... --timeout-ms 60000',
     '  # Give a friendly label to a thread',
-    '  codex-subagent label --thread 019... --label "Task 3 – log summaries"',
+    '  codex-subagent label 019... --label "Task 3 – log summaries"',
     '',
     'Notes:',
     '  start/send run detached unless you pass --wait.',
