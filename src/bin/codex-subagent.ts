@@ -12,6 +12,7 @@ import { statusCommand } from '../commands/status.ts';
 import { archiveCommand } from '../commands/archive.ts';
 import { labelCommand } from '../commands/label.ts';
 import { waitCommand } from '../commands/wait.ts';
+import { cleanCommand } from '../commands/clean.ts';
 import { RegistryLoadError } from '../lib/registry.ts';
 import { getControllerId } from '../lib/controller-id.ts';
 import { parseStartManifest, StartManifest } from '../lib/start-manifest.ts';
@@ -104,6 +105,7 @@ function parseStartFlags(args: string[]): StartFlags {
         flags.policy = next;
         i++;
         break;
+      case '-f':
       case '--prompt-file':
         if (!next) {
           throw new Error('--prompt-file flag requires a path');
@@ -111,9 +113,10 @@ function parseStartFlags(args: string[]): StartFlags {
         flags.promptFile = path.resolve(next);
         i++;
         break;
+      case '--save-response':
       case '--output-last':
         if (!next) {
-          throw new Error('--output-last flag requires a path');
+          throw new Error('--save-response flag requires a path');
         }
         flags.outputLastPath = path.resolve(next);
         i++;
@@ -147,19 +150,16 @@ function parseStartFlags(args: string[]): StartFlags {
         flags.jsonFromStdin = next === '-';
         i++;
         break;
-      case '--json-stdin':
-        flags.jsonSource = '-';
-        flags.jsonFromStdin = true;
-        break;
       case '--manifest':
         if (!next) {
-          throw new Error('--manifest flag requires a path');
+          throw new Error('--manifest flag requires a path or "-" for stdin');
         }
-        flags.manifestPath = path.resolve(next);
+        if (next === '-') {
+          flags.manifestFromStdin = true;
+        } else {
+          flags.manifestPath = path.resolve(next);
+        }
         i++;
-        break;
-      case '--manifest-stdin':
-        flags.manifestFromStdin = true;
         break;
       case '--print-prompt':
         flags.printPrompt = true;
@@ -167,6 +167,7 @@ function parseStartFlags(args: string[]): StartFlags {
       case '--dry-run':
         flags.dryRun = true;
         break;
+      case '-w':
       case '--wait':
         flags.wait = true;
         break;
@@ -178,10 +179,6 @@ function parseStartFlags(args: string[]): StartFlags {
 }
 
 async function loadManifestFromFlags(flags: StartFlags): Promise<StartManifest> {
-  if (flags.manifestPath && flags.manifestFromStdin) {
-    throw new Error('Use either --manifest or --manifest-stdin, not both.');
-  }
-
   if (flags.manifestPath) {
     const body = await readFile(flags.manifestPath, 'utf8');
     const parsed = JSON.parse(body);
@@ -387,6 +384,7 @@ function parseSendFlags(args: string[]): SendFlags {
     const arg = args[i];
     const next = args[i + 1];
     switch (arg) {
+      case '-t':
       case '--thread':
         if (!next) {
           throw new Error('--thread flag requires a value');
@@ -394,6 +392,7 @@ function parseSendFlags(args: string[]): SendFlags {
         flags.threadId = next;
         i++;
         break;
+      case '-f':
       case '--prompt-file':
         if (!next) {
           throw new Error('--prompt-file flag requires a path');
@@ -401,9 +400,10 @@ function parseSendFlags(args: string[]): SendFlags {
         flags.promptFile = path.resolve(next);
         i++;
         break;
+      case '--save-response':
       case '--output-last':
         if (!next) {
-          throw new Error('--output-last flag requires a path');
+          throw new Error('--save-response flag requires a path');
         }
         flags.outputLastPath = path.resolve(next);
         i++;
@@ -430,16 +430,13 @@ function parseSendFlags(args: string[]): SendFlags {
         flags.jsonFromStdin = next === '-';
         i++;
         break;
-      case '--json-stdin':
-        flags.jsonSource = '-';
-        flags.jsonFromStdin = true;
-        break;
       case '--print-prompt':
         flags.printPrompt = true;
         break;
       case '--dry-run':
         flags.dryRun = true;
         break;
+      case '-w':
       case '--wait':
         flags.wait = true;
         break;
@@ -462,6 +459,7 @@ function parsePeekFlags(args: string[]): PeekFlags {
     const arg = args[i];
     const next = args[i + 1];
     switch (arg) {
+      case '-t':
       case '--thread':
         if (!next) {
           throw new Error('--thread flag requires a value');
@@ -469,9 +467,10 @@ function parsePeekFlags(args: string[]): PeekFlags {
         flags.threadId = next;
         i++;
         break;
+      case '--save-response':
       case '--output-last':
         if (!next) {
-          throw new Error('--output-last flag requires a path');
+          throw new Error('--save-response flag requires a path');
         }
         flags.outputLastPath = path.resolve(next);
         i++;
@@ -521,12 +520,59 @@ interface WaitFlags {
   followLast?: boolean;
 }
 
+interface ListFlags {
+  filterStatus?: string;
+  filterLabel?: string;
+  filterRole?: string;
+}
+
+interface CleanFlags {
+  olderThanDays?: number;
+  yes?: boolean;
+  dryRun?: boolean;
+}
+
+function parseListFlags(args: string[]): ListFlags {
+  const flags: ListFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+    switch (arg) {
+      case '--status':
+        if (!next) {
+          throw new Error('--status flag requires a value');
+        }
+        flags.filterStatus = next;
+        i++;
+        break;
+      case '--label':
+        if (!next) {
+          throw new Error('--label flag requires a value');
+        }
+        flags.filterLabel = next;
+        i++;
+        break;
+      case '--role':
+        if (!next) {
+          throw new Error('--role flag requires a value');
+        }
+        flags.filterRole = next;
+        i++;
+        break;
+      default:
+        throw new Error(`Unknown flag for list command: ${arg}`);
+    }
+  }
+  return flags;
+}
+
 function parseLogFlags(args: string[]): LogFlags {
   const flags: LogFlags = {};
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
     switch (arg) {
+      case '-t':
       case '--thread':
         if (!next) {
           throw new Error('--thread flag requires a value');
@@ -544,6 +590,7 @@ function parseLogFlags(args: string[]): LogFlags {
         }
         i++;
         break;
+      case '--json':
       case '--raw':
         flags.raw = true;
         break;
@@ -563,6 +610,7 @@ function parseStatusFlags(args: string[]): StatusFlags {
     const arg = args[i];
     const next = args[i + 1];
     switch (arg) {
+      case '-t':
       case '--thread':
         if (!next) {
           throw new Error('--thread flag requires a value');
@@ -580,6 +628,7 @@ function parseStatusFlags(args: string[]): StatusFlags {
         }
         i++;
         break;
+      case '--json':
       case '--raw':
         flags.raw = true;
         break;
@@ -606,6 +655,7 @@ function parseArchiveFlags(args: string[]): ArchiveFlags {
     const arg = args[i];
     const next = args[i + 1];
     switch (arg) {
+      case '-t':
       case '--thread':
         if (!next) {
           throw new Error('--thread flag requires a value');
@@ -635,6 +685,7 @@ function parseLabelFlags(args: string[]): LabelFlags {
     const arg = args[i];
     const next = args[i + 1];
     switch (arg) {
+      case '-t':
       case '--thread':
         if (!next) {
           throw new Error('--thread flag requires a value');
@@ -769,6 +820,35 @@ function parseWatchFlags(args: string[]): WatchFlags {
   return flags;
 }
 
+function parseCleanFlags(args: string[]): CleanFlags {
+  const flags: CleanFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+    switch (arg) {
+      case '--older-than-days':
+        if (!next) {
+          throw new Error('--older-than-days flag requires a value');
+        }
+        flags.olderThanDays = Number(next);
+        if (Number.isNaN(flags.olderThanDays) || flags.olderThanDays! <= 0) {
+          throw new Error('--older-than-days must be greater than 0');
+        }
+        i++;
+        break;
+      case '--yes':
+        flags.yes = true;
+        break;
+      case '--dry-run':
+        flags.dryRun = true;
+        break;
+      default:
+        throw new Error(`Unknown flag for clean command: ${arg}`);
+    }
+  }
+  return flags;
+}
+
 function printHelp(): void {
   const lines = [
     'codex-subagent <command>',
@@ -788,6 +868,10 @@ function printHelp(): void {
     'Options:',
     '  --root <path>          Override the .codex-subagent root directory',
     '  --controller-id <id>   Override auto-detected controller session ID',
+    '  list flags:',
+    '    --status <status>     Filter by status (running, completed, etc.)',
+    '    --label <text>        Filter by label substring (case-insensitive)',
+    '    --role <role>         Filter by exact role',
     '  start flags:',
     '    --role <name>         Required Codex role (e.g., researcher)',
     '    --policy <policy>     Required policy (never "allow everything")',
@@ -872,7 +956,14 @@ async function run(): Promise<void> {
   switch (command) {
     case 'list':
       try {
-        await listCommand({ rootDir, controllerId });
+        const flags = parseListFlags(rest);
+        await listCommand({
+          rootDir,
+          controllerId,
+          filterStatus: flags.filterStatus,
+          filterLabel: flags.filterLabel,
+          filterRole: flags.filterRole,
+        });
       } catch (error) {
         if (error instanceof RegistryLoadError) {
           process.stderr.write(`${error.message}\n`);

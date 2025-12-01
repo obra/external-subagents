@@ -12,6 +12,9 @@ export interface ListCommandOptions {
   stdout?: Writable;
   controllerId: string;
   now?: () => number;
+  filterStatus?: string;
+  filterLabel?: string;
+  filterRole?: string;
 }
 
 const PENDING_WARNING_MS = 2 * 60 * 1000;
@@ -104,11 +107,28 @@ export async function listCommand(options: ListCommandOptions): Promise<void> {
   );
   const threads = normalized.filter((thread): thread is ThreadMetadata => Boolean(thread));
 
-  if (threads.length === 0) {
+  let filtered = threads;
+  if (options.filterStatus) {
+    filtered = filtered.filter(t =>
+      t.status?.toLowerCase() === options.filterStatus?.toLowerCase()
+    );
+  }
+  if (options.filterLabel) {
+    filtered = filtered.filter(t =>
+      t.label?.toLowerCase().includes(options.filterLabel!.toLowerCase())
+    );
+  }
+  if (options.filterRole) {
+    filtered = filtered.filter(t =>
+      t.role === options.filterRole
+    );
+  }
+
+  if (filtered.length === 0) {
     stdout.write('No threads found.\n');
   } else {
-    const header = `Found ${threads.length} thread${threads.length === 1 ? '' : 's'} in ${paths.root}`;
-    const sorted = threads.sort((a, b) => {
+    const header = `Found ${filtered.length} thread${filtered.length === 1 ? '' : 's'} in ${paths.root}`;
+    const sorted = filtered.sort((a, b) => {
       const aRunning = a.status === 'running' ? 0 : 1;
       const bRunning = b.status === 'running' ? 0 : 1;
       if (aRunning !== bRunning) {

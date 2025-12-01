@@ -216,4 +216,114 @@ describe('list command', () => {
     expect(text).toContain('launch-pending');
     expect(text).toContain('still waiting for Codex');
   });
+
+  it('filters threads by status', async () => {
+    const root = await createStateFixture();
+    const threadsFile = path.join(root, '.codex-subagent', 'state', 'threads.json');
+    const data = {
+      't1': {
+        thread_id: 't1',
+        status: 'running',
+        controller_id: 'controller-one',
+        role: 'worker',
+        policy: 'test',
+        updated_at: new Date().toISOString(),
+      },
+      't2': {
+        thread_id: 't2',
+        status: 'completed',
+        controller_id: 'controller-one',
+        role: 'worker',
+        policy: 'test',
+        updated_at: new Date().toISOString(),
+      },
+    };
+    await writeFile(threadsFile, JSON.stringify(data, null, 2));
+
+    const { stdout, output } = captureOutput();
+    await listCommand({
+      rootDir: path.join(root, '.codex-subagent'),
+      stdout,
+      controllerId: 'controller-one',
+      filterStatus: 'running',
+    });
+
+    const text = output.join('');
+    expect(text).toContain('t1');
+    expect(text).not.toContain('t2');
+  });
+
+  it('filters threads by label substring', async () => {
+    const root = await createStateFixture();
+    const threadsFile = path.join(root, '.codex-subagent', 'state', 'threads.json');
+    const data = {
+      't1': {
+        thread_id: 't1',
+        label: 'build-frontend',
+        controller_id: 'controller-one',
+        role: 'worker',
+        policy: 'test',
+        status: 'completed',
+        updated_at: new Date().toISOString(),
+      },
+      't2': {
+        thread_id: 't2',
+        label: 'test-backend',
+        controller_id: 'controller-one',
+        role: 'worker',
+        policy: 'test',
+        status: 'completed',
+        updated_at: new Date().toISOString(),
+      },
+    };
+    await writeFile(threadsFile, JSON.stringify(data, null, 2));
+
+    const { stdout, output } = captureOutput();
+    await listCommand({
+      rootDir: path.join(root, '.codex-subagent'),
+      stdout,
+      controllerId: 'controller-one',
+      filterLabel: 'frontend',
+    });
+
+    const text = output.join('');
+    expect(text).toContain('t1');
+    expect(text).not.toContain('t2');
+  });
+
+  it('filters threads by role', async () => {
+    const root = await createStateFixture();
+    const threadsFile = path.join(root, '.codex-subagent', 'state', 'threads.json');
+    const data = {
+      't1': {
+        thread_id: 't1',
+        controller_id: 'controller-one',
+        role: 'researcher',
+        policy: 'test',
+        status: 'completed',
+        updated_at: new Date().toISOString(),
+      },
+      't2': {
+        thread_id: 't2',
+        controller_id: 'controller-one',
+        role: 'worker',
+        policy: 'test',
+        status: 'completed',
+        updated_at: new Date().toISOString(),
+      },
+    };
+    await writeFile(threadsFile, JSON.stringify(data, null, 2));
+
+    const { stdout, output } = captureOutput();
+    await listCommand({
+      rootDir: path.join(root, '.codex-subagent'),
+      stdout,
+      controllerId: 'controller-one',
+      filterRole: 'researcher',
+    });
+
+    const text = output.join('');
+    expect(text).toContain('t1');
+    expect(text).not.toContain('t2');
+  });
 });
