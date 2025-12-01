@@ -733,6 +733,7 @@ function parseWaitFlags(args: string[]): WaitFlags {
           .filter(Boolean);
         i++;
         break;
+      case '--all':
       case '--all-controller':
         flags.all = true;
         break;
@@ -779,6 +780,7 @@ function parseWatchFlags(args: string[]): WatchFlags {
     const arg = args[i];
     const next = args[i + 1];
     switch (arg) {
+      case '-t':
       case '--thread':
         if (!next) {
           throw new Error('--thread flag requires a value');
@@ -796,20 +798,22 @@ function parseWatchFlags(args: string[]): WatchFlags {
         }
         i++;
         break;
+      case '--save-response':
       case '--output-last':
         if (!next) {
-          throw new Error('--output-last flag requires a path');
+          throw new Error('--save-response flag requires a path');
         }
         flags.outputLastPath = path.resolve(next);
         i++;
         break;
+      case '--timeout-ms':
       case '--duration-ms':
         if (!next) {
-          throw new Error('--duration-ms flag requires a value');
+          throw new Error('--timeout-ms flag requires a value');
         }
         flags.durationMs = Number(next);
         if (Number.isNaN(flags.durationMs) || flags.durationMs! < 1) {
-          throw new Error('--duration-ms must be a positive integer');
+          throw new Error('--timeout-ms must be a positive integer');
         }
         i++;
         break;
@@ -864,6 +868,7 @@ function printHelp(): void {
     '  wait            Block until threads reach a stopped state',
     '  archive         Move completed thread logs/state into archive',
     '  label           Attach or update a friendly label for a thread',
+    '  clean           Remove old archived threads to free disk space',
     '',
     'Options:',
     '  --root <path>          Override the .codex-subagent root directory',
@@ -924,6 +929,10 @@ function printHelp(): void {
     '    --interval-ms <n>     Polling interval (default 5000)',
     '    --timeout-ms <n>      Optional timeout before exiting with failure',
     '    --follow-last         Print the last assistant message when each thread stops',
+    '  clean flags:',
+    '    --older-than-days <n> Age threshold in days (default 30)',
+    '    --yes                 Required to actually delete (safety guard)',
+    '    --dry-run             Show what would be deleted without removing files',
     '',
     'Examples:',
     '  # Launch a detached researcher subagent',
@@ -1203,6 +1212,20 @@ async function run(): Promise<void> {
           yes: Boolean(flags.yes),
           dryRun: Boolean(flags.dryRun),
           controllerId,
+        });
+      } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      break;
+    case 'clean':
+      try {
+        const flags = parseCleanFlags(rest);
+        await cleanCommand({
+          rootDir,
+          olderThanDays: flags.olderThanDays,
+          yes: Boolean(flags.yes),
+          dryRun: Boolean(flags.dryRun),
         });
       } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
