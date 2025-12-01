@@ -40,6 +40,18 @@ function ensureThreadMetadata(
   }
 }
 
+const RESUMABLE_STATUSES = ['completed', 'failed', 'stopped', 'waiting'];
+
+function assertThreadResumable(thread: { thread_id: string; status?: string }): void {
+  const status = thread.status?.toLowerCase() ?? 'unknown';
+  if (!RESUMABLE_STATUSES.includes(status)) {
+    throw new Error(
+      `Thread ${thread.thread_id} has status "${thread.status}" and is not resumable. ` +
+      `Can only resume threads with status: ${RESUMABLE_STATUSES.join(', ')}`
+    );
+  }
+}
+
 export async function runSendThreadWorkflow(
   options: SendThreadWorkflowOptions
 ): Promise<{ threadId: string }> {
@@ -53,6 +65,7 @@ export async function runSendThreadWorkflow(
     registry
   );
   ensureThreadMetadata(options.threadId, ownedThread);
+  assertThreadResumable(ownedThread);
   const policyConfig = resolvePolicy(ownedThread.policy!);
   let persona = options.persona;
   if (!persona) {

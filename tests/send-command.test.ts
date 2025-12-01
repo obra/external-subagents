@@ -56,7 +56,7 @@ describe('send command', () => {
       thread_id: 'thread-123',
       role: 'researcher',
       policy: 'workspace-write',
-      status: 'running',
+      status: 'waiting',
       last_message_id: 'msg-old',
       controller_id: 'controller-one',
     });
@@ -158,6 +158,7 @@ describe('send command', () => {
       thread_id: 'thread-123',
       role: 'researcher',
       policy: 'workspace-write',
+      status: 'waiting',
       controller_id: 'controller-one',
     });
 
@@ -213,6 +214,7 @@ describe('send command', () => {
       thread_id: 'thread-123',
       role: 'researcher',
       policy: 'workspace-write',
+      status: 'completed',
       controller_id: 'controller-one',
     });
 
@@ -249,6 +251,7 @@ describe('send command', () => {
       thread_id: 'thread-123',
       role: 'researcher',
       policy: 'workspace-write',
+      status: 'stopped',
       controller_id: 'controller-one',
     });
 
@@ -279,6 +282,7 @@ describe('send command', () => {
       thread_id: 'thread-123',
       role: 'researcher',
       policy: 'workspace-write',
+      status: 'failed',
       controller_id: 'controller-one',
     });
     const promptFile = path.join(root, 'prompt.txt');
@@ -318,6 +322,7 @@ describe('send command', () => {
       thread_id: 'thread-123',
       role: 'researcher',
       policy: 'workspace-write',
+      status: 'waiting',
       controller_id: 'controller-one',
       persona: 'reviewer',
     });
@@ -342,5 +347,35 @@ describe('send command', () => {
     const sample = callOptions.transformPrompt?.('Resume now.');
     expect(sample).toContain('Reviewer instructions');
     expect(sample).toContain('Resume now.');
+  });
+
+  it('rejects send to a thread that is still running', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-send-running-'));
+    const codexRoot = path.join(root, '.codex-subagent');
+    const paths = new Paths(codexRoot);
+    await paths.ensure();
+
+    const registry = new Registry(paths);
+    await registry.upsert({
+      thread_id: 'running-thread',
+      role: 'researcher',
+      policy: 'workspace-write',
+      status: 'running',
+      controller_id: 'controller-one',
+    });
+
+    const promptFile = path.join(root, 'prompt.txt');
+    await writeFile(promptFile, 'Test prompt');
+
+    await expect(
+      sendCommand({
+        rootDir: codexRoot,
+        threadId: 'running-thread',
+        promptFile,
+        controllerId: 'controller-one',
+        wait: true,
+        cliPath: CLI_PATH,
+      })
+    ).rejects.toThrow(/still running|not resumable|cannot resume/i);
   });
 });
