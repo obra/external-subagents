@@ -104,6 +104,33 @@ export class LaunchRegistry {
     await this.writeAll(records);
   }
 
+  async cleanupStale(maxAgeMs: number, nowMs?: number): Promise<number> {
+    const records = await this.readAll();
+    const now = nowMs ?? Date.now();
+    let cleaned = 0;
+
+    for (const [id, attempt] of Object.entries(records)) {
+      if (attempt.status !== 'pending') {
+        continue;
+      }
+      const age = now - new Date(attempt.created_at).getTime();
+      if (age > maxAgeMs) {
+        records[id] = {
+          ...attempt,
+          status: 'failed' as LaunchStatus,
+          error_message: `Stale: no response after ${Math.round(age / 60000)} minutes`,
+          updated_at: new Date(now).toISOString(),
+        };
+        cleaned++;
+      }
+    }
+
+    if (cleaned > 0) {
+      await this.writeAll(records);
+    }
+    return cleaned;
+  }
+
   private async writeErrorLog(
     id: string,
     message: string,

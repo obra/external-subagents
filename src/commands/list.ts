@@ -123,6 +123,8 @@ export async function listCommand(options: ListCommandOptions): Promise<void> {
   }
 
   const launchRegistry = new LaunchRegistry(paths);
+  const STALE_LAUNCH_MS = 60 * 60 * 1000; // 1 hour
+  await launchRegistry.cleanupStale(STALE_LAUNCH_MS, nowMs);
   const launchAttempts = (await launchRegistry.listAttempts()).filter(
     (attempt) => attempt.controller_id === options.controllerId
   );
