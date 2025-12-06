@@ -399,7 +399,10 @@ async function launchDetachedWorker(options: DetachedWorkerOptions): Promise<voi
         error: new Error(validation.error ?? 'Worker failed to start'),
       });
     }
-    throw new Error(`Detached worker failed to start: ${validation.error}`);
+    throw new Error(
+      `Detached worker failed to start: ${validation.error}\n` +
+        'Hint: Re-run with -w (--wait) to see the full error from Codex.'
+    );
   }
 }
 
