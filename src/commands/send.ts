@@ -37,9 +37,23 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
   const launchRegistry = new LaunchRegistry(paths);
   const runInline = options.wait || options.printPrompt || options.dryRun;
   if (runInline) {
-    if (options.wait && !options.printPrompt && !options.dryRun) {
+    const useHeartbeat = options.wait && !options.printPrompt && !options.dryRun;
+    if (useHeartbeat) {
       stdout.write(`Sending to thread ${options.threadId}... (this may take minutes)\n`);
     }
+
+    // Heartbeat every 30s so caller knows we're not dead
+    const startTime = Date.now();
+    const heartbeat = useHeartbeat
+      ? setInterval(() => {
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          const mins = Math.floor(elapsed / 60);
+          const secs = elapsed % 60;
+          const timestamp = new Date().toLocaleTimeString();
+          stdout.write(`[${timestamp}] Still running... (${mins}m ${secs}s elapsed)\n`);
+        }, 30_000)
+      : undefined;
+
     try {
       await runSendThreadWorkflow({
         rootDir: options.rootDir,
@@ -63,6 +77,8 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
         });
       }
       throw error;
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
     }
     if (options.dryRun) {
       stdout.write('Dry run: prompt not sent.\n');

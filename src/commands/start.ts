@@ -116,20 +116,35 @@ export async function startCommand(options: StartCommandOptions): Promise<string
   if (options.wait) {
     const labelHint = options.label ? ` (${options.label})` : '';
     stdout.write(`Running Codex${labelHint}... (this may take minutes)\n`);
-    const result = await runStartThreadWorkflow({
-      rootDir: options.rootDir,
-      role,
-      policy: resolvedPolicy,
-      promptFile: promptBody ? undefined : promptFile,
-      promptBody,
-      outputLastPath: options.outputLastPath,
-      controllerId: options.controllerId,
-      workingDir: options.workingDir,
-      label: options.label,
-      persona,
-    });
-    stdout.write(`Started thread ${result.threadId}\n`);
-    return result.threadId;
+
+    // Heartbeat every 30s so caller knows we're not dead
+    const startTime = Date.now();
+    const heartbeat = setInterval(() => {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const mins = Math.floor(elapsed / 60);
+      const secs = elapsed % 60;
+      const timestamp = new Date().toLocaleTimeString();
+      stdout.write(`[${timestamp}] Still running... (${mins}m ${secs}s elapsed)\n`);
+    }, 30_000);
+
+    try {
+      const result = await runStartThreadWorkflow({
+        rootDir: options.rootDir,
+        role,
+        policy: resolvedPolicy,
+        promptFile: promptBody ? undefined : promptFile,
+        promptBody,
+        outputLastPath: options.outputLastPath,
+        controllerId: options.controllerId,
+        workingDir: options.workingDir,
+        label: options.label,
+        persona,
+      });
+      stdout.write(`Started thread ${result.threadId}\n`);
+      return result.threadId;
+    } finally {
+      clearInterval(heartbeat);
+    }
   }
 
   let launchId: string | undefined;

@@ -86,12 +86,15 @@ Resumable statuses: `completed`, `failed`, `stopped`, `waiting`
 
 ### Quick blocking task
 ```bash
-# -w blocks until done, shows errors immediately
+# -w blocks until Codex finishes (may take 2-5+ minutes!)
+# Shows progress heartbeat every 30s so you know it's not dead
 ~/.codex/skills/using-subagents-as-codex/codex-subagent start \
   --role researcher --policy read-only \
   -f task.txt -w --save-response result.txt
 cat result.txt
 ```
+
+**Warning**: `-w` blocks the shell for as long as Codex runs. For long tasks, prefer detached mode and use `wait --follow-last` to check later.
 
 ### Cleanup old work
 ```bash
