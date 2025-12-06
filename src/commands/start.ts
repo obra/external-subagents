@@ -117,14 +117,20 @@ export async function startCommand(options: StartCommandOptions): Promise<string
     const labelHint = options.label ? ` (${options.label})` : '';
     stdout.write(`Running Codex${labelHint}... (this may take minutes)\n`);
 
-    // Heartbeat every 30s so caller knows we're not dead
+    // Track progress for heartbeat
     const startTime = Date.now();
+    let lineCount = 0;
+    const onProgress = (count: number) => {
+      lineCount = count;
+    };
+
+    // Heartbeat every 30s so caller knows we're not dead
     const heartbeat = setInterval(() => {
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       const mins = Math.floor(elapsed / 60);
       const secs = elapsed % 60;
       const timestamp = new Date().toLocaleTimeString();
-      stdout.write(`[${timestamp}] Still running... (${mins}m ${secs}s elapsed)\n`);
+      stdout.write(`[${timestamp}] Still running... (${mins}m ${secs}s, ${lineCount} events)\n`);
     }, 30_000);
 
     try {
@@ -139,6 +145,7 @@ export async function startCommand(options: StartCommandOptions): Promise<string
         workingDir: options.workingDir,
         label: options.label,
         persona,
+        onProgress,
       });
       stdout.write(`Started thread ${result.threadId}\n`);
       return result.threadId;

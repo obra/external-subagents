@@ -23,6 +23,7 @@ export interface SendThreadWorkflowOptions {
   printPrompt?: boolean;
   dryRun?: boolean;
   stdout?: Writable;
+  onProgress?: (lineCount: number) => void;
 }
 
 function ensureThreadMetadata(
@@ -107,6 +108,7 @@ export async function runSendThreadWorkflow(
       : undefined,
     extraArgs: ['resume', options.threadId],
     transformPrompt,
+    onProgress: options.onProgress,
     ...policyConfig,
   });
 

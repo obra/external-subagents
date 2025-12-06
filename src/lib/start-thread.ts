@@ -19,6 +19,7 @@ export interface StartThreadWorkflowOptions {
   label?: string;
   persona?: PersonaRuntime;
   launchId?: string;
+  onProgress?: (lineCount: number) => void;
 }
 
 export interface StartThreadWorkflowResult {
@@ -43,6 +44,7 @@ export async function runStartThreadWorkflow(
     promptBody: options.promptBody,
     outputLastPath: options.outputLastPath ? path.resolve(options.outputLastPath) : undefined,
     transformPrompt,
+    onProgress: options.onProgress,
     ...policyConfig,
   });
 

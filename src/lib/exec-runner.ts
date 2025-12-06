@@ -32,6 +32,7 @@ export interface ExecOptions {
   sandbox?: string;
   profile?: string;
   transformPrompt?: (body: string) => string;
+  onProgress?: (lineCount: number) => void;
 }
 
 function buildArgs(options: ExecOptions): string[] {
@@ -67,9 +68,30 @@ export async function runExec(options: ExecOptions): Promise<ExecResult> {
     promptBody = options.transformPrompt(promptBody);
   }
 
+  // Stream stdout to count lines for progress reporting
+  const lines: string[] = [];
+  const child = execa('codex', args, { input: promptBody });
+
+  if (child.stdout && options.onProgress) {
+    let buffer = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf8');
+      const parts = buffer.split(/\r?\n/);
+      // Keep incomplete line in buffer
+      buffer = parts.pop() ?? '';
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.length > 0) {
+          lines.push(trimmed);
+          options.onProgress!(lines.length);
+        }
+      }
+    });
+  }
+
   let stdout: string;
   try {
-    ({ stdout } = await execa('codex', args, { input: promptBody }));
+    ({ stdout } = await child);
   } catch (error) {
     const formatted = formatCodexExecError(error);
     if (isExecaError(error)) {
@@ -80,12 +102,15 @@ export async function runExec(options: ExecOptions): Promise<ExecResult> {
     throw formatted;
   }
 
-  const lines = stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+  // If we streamed, use collected lines; otherwise parse stdout
+  const parsedLines = lines.length > 0
+    ? lines
+    : stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
 
-  if (lines.length === 0) {
+  if (parsedLines.length === 0) {
     throw new Error('codex exec returned no JSON output');
   }
 
@@ -93,7 +118,7 @@ export async function runExec(options: ExecOptions): Promise<ExecResult> {
   const messages: ExecMessage[] = [];
   let status: string | undefined;
 
-  for (const line of lines) {
+  for (const line of parsedLines) {
     let event: unknown;
     try {
       event = JSON.parse(line);

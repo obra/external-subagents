@@ -8,7 +8,20 @@
       "Bash(git stash push:*)",
       "Bash(git stash pop:*)",
       "Bash(npm test:*)",
-      "Bash(npm run typecheck:*)"
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run build:*)",
+      "Bash(node dist/codex-subagent.js:*)",
+      "Bash(__NEW_LINE__ echo \"\")",
+      "Bash(cat:*)",
+      "WebSearch",
+      "Skill(superpowers:writing-skills)",
+      "Bash(codex --version:*)",
+      "Bash(/Users/jesse/Documents/GitHub/superpowers/codex-subagents/dist/codex-subagent.js --help)",
+      "Bash(node:*)",
+      "Bash(/Users/jesse/Documents/GitHub/superpowers/codex-subagents/dist/codex-subagent.js list --label auth)",
+      "Bash(/Users/jesse/Documents/GitHub/superpowers/codex-subagents/dist/codex-subagent.js list)",
+      "Bash(~/.codex/skills/using-subagents-as-codex/codex-subagent:*)",
+      "Bash(codex config:*)"
     ],
     "deny": [],
     "ask": []

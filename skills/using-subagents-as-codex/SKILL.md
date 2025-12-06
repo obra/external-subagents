@@ -87,7 +87,7 @@ Resumable statuses: `completed`, `failed`, `stopped`, `waiting`
 ### Quick blocking task
 ```bash
 # -w blocks until Codex finishes (may take 2-5+ minutes!)
-# Shows progress heartbeat every 30s so you know it's not dead
+# Shows heartbeat every 30s with elapsed time and event count
 ~/.codex/skills/using-subagents-as-codex/codex-subagent start \
   --role researcher --policy read-only \
   -f task.txt -w --save-response result.txt

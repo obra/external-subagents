@@ -144,7 +144,7 @@ describe('start command', () => {
     expect(spawnArgs[0]).toBe(process.execPath);
     expect(spawnArgs[2] as Record<string, unknown>).toMatchObject({
       detached: true,
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     const spawnArgv = spawnArgs[1] as string[];

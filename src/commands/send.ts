@@ -42,15 +42,23 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
       stdout.write(`Sending to thread ${options.threadId}... (this may take minutes)\n`);
     }
 
-    // Heartbeat every 30s so caller knows we're not dead
+    // Track progress for heartbeat
     const startTime = Date.now();
+    let lineCount = 0;
+    const onProgress = useHeartbeat
+      ? (count: number) => {
+          lineCount = count;
+        }
+      : undefined;
+
+    // Heartbeat every 30s so caller knows we're not dead
     const heartbeat = useHeartbeat
       ? setInterval(() => {
           const elapsed = Math.round((Date.now() - startTime) / 1000);
           const mins = Math.floor(elapsed / 60);
           const secs = elapsed % 60;
           const timestamp = new Date().toLocaleTimeString();
-          stdout.write(`[${timestamp}] Still running... (${mins}m ${secs}s elapsed)\n`);
+          stdout.write(`[${timestamp}] Still running... (${mins}m ${secs}s, ${lineCount} events)\n`);
         }, 30_000)
       : undefined;
 
@@ -67,6 +75,7 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
         printPrompt: Boolean(options.printPrompt),
         dryRun: Boolean(options.dryRun),
         stdout,
+        onProgress,
       });
     } catch (error) {
       if (!options.dryRun) {
