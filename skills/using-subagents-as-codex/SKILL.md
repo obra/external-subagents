@@ -106,7 +106,6 @@ cat result.txt
 |---------|-------|-----|
 | "command not found" | Tool not in PATH | Use full path `~/.codex/skills/using-subagents-as-codex/codex-subagent` |
 | "profile does not exist" | Wrong policy name | Use `read-only` or `workspace-write` (not `workspace-read`) |
-| "Detached worker failed" | Config error hidden | Re-run with `-w` to see the actual error |
 | "not resumable" error | Thread still running | `wait` first, then `send` |
 | "different controller" | Wrong session | Use `--controller-id` or check `list` |
 | Launch failed (ENOENT) | codex not in PATH | Verify `which codex` works |

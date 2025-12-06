@@ -388,7 +388,7 @@ async function launchDetachedWorker(options: DetachedWorkerOptions): Promise<voi
   const payload = Buffer.from(JSON.stringify(payloadData), 'utf8').toString('base64');
   const child = spawn(process.execPath, [cliPath, 'worker-start', '--payload', payload], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'], // Capture stdout/stderr during validation
   });
   child.unref();
 
@@ -399,10 +399,7 @@ async function launchDetachedWorker(options: DetachedWorkerOptions): Promise<voi
         error: new Error(validation.error ?? 'Worker failed to start'),
       });
     }
-    throw new Error(
-      `Detached worker failed to start: ${validation.error}\n` +
-        'Hint: Re-run with -w (--wait) to see the full error from Codex.'
-    );
+    throw new Error(`Detached worker failed to start: ${validation.error}`);
   }
 }
 
