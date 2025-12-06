@@ -37,6 +37,9 @@ export async function sendCommand(options: SendCommandOptions): Promise<void> {
   const launchRegistry = new LaunchRegistry(paths);
   const runInline = options.wait || options.printPrompt || options.dryRun;
   if (runInline) {
+    if (options.wait && !options.printPrompt && !options.dryRun) {
+      stdout.write(`Sending to thread ${options.threadId}... (this may take minutes)\n`);
+    }
     try {
       await runSendThreadWorkflow({
         rootDir: options.rootDir,

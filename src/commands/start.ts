@@ -114,6 +114,8 @@ export async function startCommand(options: StartCommandOptions): Promise<string
   }
 
   if (options.wait) {
+    const labelHint = options.label ? ` (${options.label})` : '';
+    stdout.write(`Running Codex${labelHint}... (this may take minutes)\n`);
     const result = await runStartThreadWorkflow({
       rootDir: options.rootDir,
       role,
