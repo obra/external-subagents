@@ -1,7 +1,9 @@
-node_modules/
-dist/
+scripts/node_modules/
+scripts/codex-subagent.js
+scripts/codex-subagent.js.map
 .tmp/
 .DS_Store
 coverage/
 .npm-debug.log*
 .codex-subagent/
+.claude/

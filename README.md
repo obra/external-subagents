@@ -17,23 +17,18 @@ All commands assume Node 20+ and npm 10+.
 codex-subagent <command> [options]
 ```
 
-### Installing for `~/.codex/skills`
+### Installing as a Codex Skill
 
-If you need Codex to call the CLI from a skill folder (e.g., `using-subagents-as-codex`), install this package there with production dependencies only:
-
-```bash
-npm install --prefix ~/.codex/skills/using-subagents-as-codex --production .
-```
-
-Afterwards, invoke the CLI through the binary that `npm` drops inside the skill directory:
+Clone this repository to `~/.codex/skills/using-subagents-as-codex/`:
 
 ```bash
-~/.codex/skills/using-subagents-as-codex/codex-subagent <command>
+git clone https://github.com/YOUR_ORG/using-subagents-as-codex ~/.codex/skills/using-subagents-as-codex
+cd ~/.codex/skills/using-subagents-as-codex/scripts
+npm install
+npm run build
 ```
 
-This absolute path works no matter which repository the parent Codex session is using.
-
-> Why this path? The installer drops a tiny Node wrapper named `codex-subagent` beside the skill. That script simply `import()`s `node_modules/codex-subagent-cli/dist/codex-subagent.js`, so all real dependencies stay inside `node_modules` while the wrapper remains stable and executable. If you ever delete or move the script, rerun the install command above to recreate it.
+Codex will use the relative path `scripts/codex-subagent.js` when invoking the CLI from the skill.
 
 ### Global flags
 
