@@ -1,6 +1,5 @@
 import process from 'node:process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { listCommand } from '../commands/list.ts';
 import { startCommand } from '../commands/start.ts';
@@ -23,7 +22,8 @@ import { Paths } from '../lib/paths.ts';
 import { LaunchRegistry } from '../lib/launch-registry.ts';
 import { markThreadError } from '../lib/thread-errors.ts';
 
-const CLI_ENTRY_PATH = fileURLToPath(import.meta.url);
+// Use process.argv[1] for bundled executable compatibility
+const CLI_ENTRY_PATH = process.argv[1];
 
 interface ParsedArgs {
   command: string;

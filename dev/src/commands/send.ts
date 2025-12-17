@@ -2,7 +2,6 @@ import process from 'node:process';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { runSendThreadWorkflow } from '../lib/send-thread.ts';
 import { Paths } from '../lib/paths.ts';
 import { LaunchRegistry } from '../lib/launch-registry.ts';
@@ -138,7 +137,7 @@ function resolveCliPath(overridePath?: string): string {
   if (process.argv[1]) {
     return process.argv[1];
   }
-  return fileURLToPath(new URL('../bin/codex-subagent.ts', import.meta.url));
+  throw new Error('Cannot determine CLI path: process.argv[1] is not set');
 }
 
 function formatErrorMessage(error: unknown): string {

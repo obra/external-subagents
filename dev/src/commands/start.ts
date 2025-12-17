@@ -2,7 +2,6 @@ import process from 'node:process';
 import { Writable } from 'node:stream';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { runStartThreadWorkflow } from '../lib/start-thread.ts';
 import { loadPersonaRuntime, mapModelAliasToPermissions, PersonaRuntime } from '../lib/personas.ts';
@@ -469,7 +468,7 @@ function resolveCliPath(overridePath?: string): string {
   if (process.argv[1]) {
     return process.argv[1];
   }
-  return fileURLToPath(new URL('../bin/codex-subagent.ts', import.meta.url));
+  throw new Error('Cannot determine CLI path: process.argv[1] is not set');
 }
 
 function getProjectRoot(rootDir?: string): string {

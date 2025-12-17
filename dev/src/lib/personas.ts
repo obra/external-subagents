@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import process from 'node:process';
 import os from 'node:os';
 import { readFile, access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
@@ -44,8 +44,12 @@ function resolveSuperpowersAgentsDir(explicitRoot?: string): string | undefined 
   if (explicitRoot) {
     return path.join(explicitRoot, 'agents');
   }
-  const moduleDir = fileURLToPath(new URL('.', import.meta.url));
-  return path.resolve(moduleDir, '../../agents');
+  // Fallback: look relative to the CLI executable
+  if (process.argv[1]) {
+    const cliDir = path.dirname(process.argv[1]);
+    return path.resolve(cliDir, 'agents');
+  }
+  return undefined;
 }
 
 async function readPersonaFile(filePath: string): Promise<PersonaDefinition> {

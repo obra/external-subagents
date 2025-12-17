@@ -6,7 +6,7 @@ export default defineConfig({
   sourcemap: true,
   clean: false,
   target: 'node20',
-  outDir: '.',
+  outDir: '..',
   splitting: false,
   shims: false,
   banner: { js: '#!/usr/bin/env node' },

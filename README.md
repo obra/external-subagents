@@ -5,11 +5,12 @@ A TypeScript CLI for launching and managing Codex subagents without bloating the
 ## Getting Started
 
 ```bash
+cd dev
 npm install
 npm run build
 ```
 
-All commands assume Node 20+ and npm 10+.
+All commands assume Node 20+ and npm 10+. The build outputs `codex-subagent` to the repo root.
 
 ## CLI Usage
 
@@ -23,12 +24,12 @@ Clone this repository to `~/.codex/skills/using-subagents-as-codex/`:
 
 ```bash
 git clone https://github.com/YOUR_ORG/using-subagents-as-codex ~/.codex/skills/using-subagents-as-codex
-cd ~/.codex/skills/using-subagents-as-codex/scripts
+cd ~/.codex/skills/using-subagents-as-codex/dev
 npm install
 npm run build
 ```
 
-Codex will use the relative path `scripts/codex-subagent.js` when invoking the CLI from the skill.
+Codex will use the relative path `codex-subagent` when invoking the CLI from the skill.
 
 ### Global flags
 

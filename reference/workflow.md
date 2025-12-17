@@ -4,10 +4,10 @@ This doc captures the recommended flow for spinning up subagents via `codex-suba
 
 ## 1. Start a Thread
 
-Install by cloning to `~/.codex/skills/using-subagents-as-codex/`, then run `npm install && npm run build` in the `scripts/` directory. This creates `scripts/codex-subagent.js`.
+Install by cloning to `~/.codex/skills/using-subagents-as-codex/`, then run `npm install && npm run build` in the `dev/` directory. This creates `codex-subagent` at the repo root.
 
 ```
-scripts/codex-subagent.js \
+codex-subagent \
   start --role researcher --policy workspace-write \
   --prompt-file task.txt [--cwd /path/to/repo] [--persona code-reviewer] [--label "Task Name"] \
   [--output-last last.txt] [--controller-id demo-doc] [--wait]
@@ -176,7 +176,7 @@ codex exec --dangerously-bypass-approvals-and-sandbox \
 
 The prompt asked Codex to execute a short Bash script that:
 
-1. Launched `scripts/codex-subagent.js start --controller-id realworld-test --json -` with an inline JSON payload (`role`/`policy` plus prompt/cwd/label).
+1. Launched `codex-subagent start --controller-id realworld-test --json -` with an inline JSON payload (`role`/`policy` plus prompt/cwd/label).
 2. Slept 5 seconds so the detached worker could create `.codex-subagent/state`.
 3. Listed `.codex-subagent/` to prove the registry/log files exist.
 
@@ -184,7 +184,7 @@ Results:
 
 - Transcript is saved at `reference/examples/2025-11-28-realworld-smoke.log`.
 - A new thread (`019acc56-ae90-7110-8164-d4576f8b6522`, label `realworld-smoke`) appeared under `/tmp/codex-realworld/.codex-subagent`.
-- Running `scripts/codex-subagent.js list --root /tmp/codex-realworld/.codex-subagent --controller-id realworld-test` showed the thread as `stopped · updated just now`.
+- Running `codex-subagent list --root /tmp/codex-realworld/.codex-subagent --controller-id realworld-test` showed the thread as `stopped · updated just now`.
 - `peek` and `log --tail 5` replayed the assistant’s final turn without resuming Codex, and `status` surfaced the same message plus idle timing.
 - Because detached launches don’t print thread IDs, always pass `--controller-id <label>` during tests so later commands can target the right registry entries.
 - When scripting verification, insert a brief `sleep` (or use `codex-subagent wait`) before inspecting `.codex-subagent`—the worker needs a moment to write state/log files.

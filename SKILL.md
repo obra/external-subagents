@@ -11,7 +11,7 @@ description: Enables subagents for codex. Use when Codex needs parallel or long-
 
 **Critical rules**:
 1. You cannot send to a running thread. Always wait before sending follow-ups.
-2. Use the relative path: `scripts/codex-subagent.js`
+2. Use the relative path: `codex-subagent`
 3. Use Codex's built-in policies: `read-only` or `workspace-write` (not `workspace-read`)
 
 For detailed workflow documentation, see [reference/workflow.md](reference/workflow.md).
@@ -43,11 +43,11 @@ For detailed workflow documentation, see [reference/workflow.md](reference/workf
 
 ```bash
 # WRONG - thread might still be running
-scripts/codex-subagent.js send thread-abc -f followup.txt
+codex-subagent send thread-abc -f followup.txt
 
 # RIGHT - wait first, then send
-scripts/codex-subagent.js wait --threads thread-abc
-scripts/codex-subagent.js send thread-abc -f followup.txt
+codex-subagent wait --threads thread-abc
+codex-subagent send thread-abc -f followup.txt
 ```
 
 Resumable statuses: `completed`, `failed`, `stopped`, `waiting`
@@ -75,22 +75,22 @@ Resumable statuses: `completed`, `failed`, `stopped`, `waiting`
 ### Parallel research
 ```bash
 # Launch multiple researchers
-scripts/codex-subagent.js start \
+codex-subagent start \
   --role researcher --policy read-only \
   --label "API: Stripe" -f stripe-task.txt
-scripts/codex-subagent.js start \
+codex-subagent start \
   --role researcher --policy read-only \
   --label "API: Twilio" -f twilio-task.txt
 
 # Wait for all, see results
-scripts/codex-subagent.js wait --labels "API:" --follow-last
+codex-subagent wait --labels "API:" --follow-last
 ```
 
 ### Quick blocking task
 ```bash
 # -w blocks until Codex finishes (may take 2-5+ minutes!)
 # Shows heartbeat every 30s with elapsed time and event count
-scripts/codex-subagent.js start \
+codex-subagent start \
   --role researcher --policy read-only \
   -f task.txt -w --save-response result.txt
 cat result.txt
@@ -101,15 +101,15 @@ cat result.txt
 ### Cleanup old work
 ```bash
 # Two-phase: archive completed, then clean old archives
-scripts/codex-subagent.js archive --completed --yes
-scripts/codex-subagent.js clean --older-than-days 30 --yes
+codex-subagent archive --completed --yes
+codex-subagent clean --older-than-days 30 --yes
 ```
 
 ## Troubleshooting
 
 | Problem | Cause | Fix |
 |---------|-------|-----|
-| "command not found" | Tool not in PATH | Use relative path `scripts/codex-subagent.js` |
+| "command not found" | Tool not in PATH | Use relative path `codex-subagent` |
 | "profile does not exist" | Wrong policy name | Use `read-only` or `workspace-write` (not `workspace-read`) |
 | "not resumable" error | Thread still running | `wait` first, then `send` |
 | "different controller" | Wrong session | Use `--controller-id` or check `list` |
@@ -118,7 +118,7 @@ scripts/codex-subagent.js clean --older-than-days 30 --yes
 
 ## Checklist
 
-- [ ] Using relative path `scripts/codex-subagent.js`
+- [ ] Using relative path `codex-subagent`
 - [ ] Policy is `read-only` or `workspace-write` (not `workspace-read`)
 - [ ] Prompt written to file before CLI call
 - [ ] `start` has role, policy, prompt-file, and label

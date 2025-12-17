@@ -1,9 +1,10 @@
-scripts/node_modules/
-scripts/codex-subagent.js
-scripts/codex-subagent.js.map
+dev/node_modules/
+codex-subagent
+codex-subagent.map
 .tmp/
 .DS_Store
 coverage/
 .npm-debug.log*
 .codex-subagent/
 .claude/
+.pytest_cache/

@@ -4,10 +4,10 @@
   "description": "TypeScript CLI for managing Codex subagent threads",
   "type": "module",
   "bin": {
-    "codex-subagent": "./codex-subagent.js"
+    "codex-subagent": "../codex-subagent"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "node build.mjs",
     "dev": "tsx src/bin/codex-subagent.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
