@@ -6,15 +6,15 @@ This doc captures the recommended flow for spinning up subagents via `codex-suba
 
 Install by cloning to `~/.codex/skills/using-subagents-as-codex/`, then run `npm install && npm run build` in the `dev/` directory. This creates `codex-subagent` at the repo root.
 
-```
-codex-subagent \
-  start --role researcher --policy workspace-write \
-  --prompt-file task.txt [--cwd /path/to/repo] [--persona code-reviewer] [--label "Task Name"] \
+```bash
+echo "Your prompt here" | codex-subagent start \
+  --role researcher --permissions workspace-write \
+  --prompt - [--cwd /path/to/repo] [--persona code-reviewer] [--label "Task Name"] \
   [--output-last last.txt] [--controller-id demo-doc] [--wait]
 ```
 
-- Write prompts to files to avoid shell quoting issues, or feed structured JSON via `--json prompt.json` / `--json -` (stdin) with keys such as `prompt`, `role`, `policy`, `cwd`, `label`, `persona`, `output_last`, and `wait`.
-- `workspace-write` is the recommended policy; custom policy names only work if you have matching Codex profiles configured. When you pass `--persona`, the persona’s `model` field remaps the sandbox (e.g., `haiku` → `read-only`, `sonnet` → `workspace-write`).
+- **Prompt input**: `--prompt -` reads from stdin (preferred), `--prompt "text"` for simple prompts, `--prompt-file` for files. Stdin avoids shell escaping issues.
+- `--permissions workspace-write` is recommended; use `read-only` for research-only tasks. When you pass `--persona`, the persona's `model` field remaps permissions (e.g., `haiku` → `read-only`, `sonnet` → `workspace-write`).
 - **Detached by default:** without `--wait`, `start` spawns a background Codex process and returns immediately. Long-running tasks may take minutes or hours; use `peek`/`log` later to inspect results, or add `--wait` when you need to stream the entire run inline.
 - A new thread entry is persisted under `.codex-subagent/state/threads.json`, with NDJSON logs under `.codex-subagent/logs/<thread>.ndjson`.
 - Personas live (in priority order) under `.codex/agents/` in the project, `~/.codex/agents/`, and the superpowers `agents/` directory. Their prompts and referenced skills are injected automatically, and the persona name is stored with the thread.
@@ -29,7 +29,7 @@ When you need several helpers at once, put them in a JSON manifest instead of ha
   {
     "prompt": "You are Alpha...",
     "role": "researcher",
-    "policy": "workspace-write",
+    "permissions": "workspace-write",
     "cwd": "/repo/a",
     "label": "Alpha task",
   },
@@ -43,22 +43,22 @@ When you need several helpers at once, put them in a JSON manifest instead of ha
 
 Save it as `tasks.json` (or pipe the JSON to stdin) and run:
 
-```
-codex-subagent start --policy workspace-write --role researcher --manifest tasks.json
+```bash
+codex-subagent start --permissions workspace-write --role researcher --manifest tasks.json
 ```
 
-Per-entry `role`, `policy`, `cwd`, `label`, `persona`, `outputLast`, and `wait` override the CLI defaults; unspecified fields inherit the CLI/defaults block at the top of the manifest. Detached entries return immediately, while entries with `wait: true` behave like inline `start --wait`. The summary printed at the end shows which tasks detached vs. waited and the thread IDs for waited entries—capture those IDs if you need to resume them later.
+Per-entry `role`, `permissions`, `cwd`, `label`, `persona`, `outputLast`, and `wait` override the CLI defaults; unspecified fields inherit the CLI/defaults block at the top of the manifest. Detached entries return immediately, while entries with `wait: true` behave like inline `start --wait`. The summary printed at the end shows which tasks detached vs. waited and the thread IDs for waited entries—capture those IDs if you need to resume them later.
 
 ## 2. Resume with Context (Optional)
 
 If the subagent needs another turn, feed it more context (detached by default, add `--wait` to stream inline). Use `--cwd` again if you want Codex to restate the working directory for the new turn:
 
-```
-codex-subagent send --thread <thread_id> --prompt-file followup.txt \
+```bash
+echo "Your followup prompt" | codex-subagent send <thread_id> --prompt - \
   [--cwd /path/to/repo] [--persona code-reviewer] [--output-last last.txt] [--wait]
 ```
 
-`send` shells out to `codex exec resume …`, appends the streamed JSONL to the log, and updates the registry (status, `last_message_id`). Detached mode lets the main session keep working while Codex runs; pass `--wait` when you need to sit in the turn until it finishes. `--cwd` prepends a “work inside …” instruction so reviewers/helpers never guess the repo path. You can also pass `--json followup.json` (or stdin) instead of `--prompt-file` for single-shot resumes, and use `--print-prompt`/`--dry-run` just like `start` when you want to audit the composed message.
+`send` shells out to `codex exec resume …`, appends the streamed JSONL to the log, and updates the registry (status, `last_message_id`). Detached mode lets the main session keep working while Codex runs; pass `--wait` when you need to sit in the turn until it finishes. `--cwd` prepends a "work inside …" instruction so reviewers/helpers never guess the repo path. Use `--print-prompt`/`--dry-run` when you want to audit the composed message.
 
 ## 3. Check Results Without Resuming
 
@@ -176,7 +176,7 @@ codex exec --dangerously-bypass-approvals-and-sandbox \
 
 The prompt asked Codex to execute a short Bash script that:
 
-1. Launched `codex-subagent start --controller-id realworld-test --json -` with an inline JSON payload (`role`/`policy` plus prompt/cwd/label).
+1. Launched `codex-subagent start --controller-id realworld-test --json -` with an inline JSON payload (`role`/`permissions` plus prompt/cwd/label).
 2. Slept 5 seconds so the detached worker could create `.codex-subagent/state`.
 3. Listed `.codex-subagent/` to prove the registry/log files exist.
 

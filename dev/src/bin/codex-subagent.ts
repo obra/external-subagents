@@ -73,6 +73,8 @@ interface StartFlags {
   permissions?: 'read-only' | 'workspace-write';
   profile?: string;
   promptFile?: string;
+  prompt?: string;
+  promptFromStdin?: boolean;
   outputLastPath?: string;
   wait?: boolean;
   workingDir?: string;
@@ -124,6 +126,17 @@ function parseStartFlags(args: string[]): StartFlags {
           throw new Error('--prompt-file flag requires a path');
         }
         flags.promptFile = path.resolve(next);
+        i++;
+        break;
+      case '--prompt':
+        if (!next) {
+          throw new Error('--prompt flag requires text or "-" for stdin');
+        }
+        if (next === '-') {
+          flags.promptFromStdin = true;
+        } else {
+          flags.prompt = next;
+        }
         i++;
         break;
       case '--save-response':
@@ -401,6 +414,8 @@ function normalizeSendJsonPayload(data: unknown, source: string, baseDir: string
 interface SendFlags {
   threadId?: string;
   promptFile?: string;
+  prompt?: string;
+  promptFromStdin?: boolean;
   outputLastPath?: string;
   wait?: boolean;
   workingDir?: string;
@@ -438,6 +453,17 @@ function parseSendFlags(args: string[]): SendFlags {
           throw new Error('--prompt-file flag requires a path');
         }
         flags.promptFile = path.resolve(next);
+        i++;
+        break;
+      case '--prompt':
+        if (!next) {
+          throw new Error('--prompt flag requires text or "-" for stdin');
+        }
+        if (next === '-') {
+          flags.promptFromStdin = true;
+        } else {
+          flags.prompt = next;
+        }
         i++;
         break;
       case '--save-response':
@@ -965,7 +991,8 @@ function printHelp(): void {
     '    --profile <name>           Codex-only: custom profile (overrides permissions)',
     '    --backend <backend>        Backend: codex (default) or claude',
     '    --model <model>            Model to use (e.g., sonnet, opus, haiku)',
-    '    -f, --prompt-file <path>   Prompt contents for the subagent',
+    '    --prompt <text|->          Prompt text directly, or - for stdin',
+    '    -f, --prompt-file <path>   Prompt contents from file',
     '    --save-response <path>     Optional file for last message text',
     '    --cwd <path>               Optional working directory instruction for the subagent',
     '    --label <text>             Optional friendly label stored with the thread',
@@ -976,7 +1003,8 @@ function printHelp(): void {
     '  send flags:',
     '    <thread-id>                Positional thread ID (alternative to --thread)',
     '    -t, --thread <id>          Target thread to resume (required)',
-    '    -f, --prompt-file <path>   Prompt file for the next turn',
+    '    --prompt <text|->          Prompt text directly, or - for stdin',
+    '    -f, --prompt-file <path>   Prompt contents from file',
     '    --save-response <path>     Optional file for last message text',
     '    --cwd <path>               Optional working directory instruction for the subagent',
     '    --persona <name>           Optional persona override for this turn',
@@ -1028,6 +1056,8 @@ function printHelp(): void {
     '    --dry-run             Show what would be deleted without removing files',
     '',
     'Examples:',
+    '  # Launch with prompt from stdin (no tempfile needed)',
+    '  echo "Research topic X" | codex-subagent start --role researcher --permissions read-only --prompt -',
     '  # Launch a detached researcher subagent with Codex',
     '  codex-subagent start --role researcher --permissions workspace-write --prompt-file task.txt',
     '  # Launch with Claude backend',
@@ -1082,6 +1112,23 @@ async function run(): Promise<void> {
     case 'start':
       try {
         const flags = parseStartFlags(rest);
+        // Validate stdin conflicts
+        const stdinSources = [
+          flags.promptFromStdin && '--prompt -',
+          flags.jsonFromStdin && '--json -',
+          flags.manifestFromStdin && '--manifest -',
+        ].filter(Boolean);
+        if (stdinSources.length > 1) {
+          throw new Error(`Cannot combine multiple stdin sources: ${stdinSources.join(', ')}`);
+        }
+        // Read prompt from stdin if requested
+        let stdinPrompt: string | undefined;
+        if (flags.promptFromStdin) {
+          stdinPrompt = await readStdin();
+          if (!stdinPrompt.trim()) {
+            throw new Error('Prompt from stdin was empty.');
+          }
+        }
         let manifest: StartManifest | undefined;
         if (flags.manifestPath || flags.manifestFromStdin) {
           manifest = await loadManifestFromFlags(flags);
@@ -1109,7 +1156,7 @@ async function run(): Promise<void> {
         const resolvedPermissions = jsonSingle?.permissions ?? flags.permissions;
         const resolvedProfile = jsonSingle?.profile ?? flags.profile;
         const resolvedPromptFile = jsonSingle?.promptFile ?? flags.promptFile;
-        const resolvedPromptBody = jsonSingle?.promptBody;
+        const resolvedPromptBody = jsonSingle?.promptBody ?? stdinPrompt ?? flags.prompt;
         const resolvedWorkingDir = jsonSingle?.workingDir ?? flags.workingDir;
         const resolvedLabel = jsonSingle?.label ?? flags.label;
         const resolvedPersona = jsonSingle?.persona ?? flags.persona;
@@ -1142,9 +1189,25 @@ async function run(): Promise<void> {
     case 'send':
       try {
         const flags = parseSendFlags(rest);
+        // Validate stdin conflicts
+        const stdinSources = [
+          flags.promptFromStdin && '--prompt -',
+          flags.jsonFromStdin && '--json -',
+        ].filter(Boolean);
+        if (stdinSources.length > 1) {
+          throw new Error(`Cannot combine multiple stdin sources: ${stdinSources.join(', ')}`);
+        }
+        // Read prompt from stdin if requested
+        let stdinPrompt: string | undefined;
+        if (flags.promptFromStdin) {
+          stdinPrompt = await readStdin();
+          if (!stdinPrompt.trim()) {
+            throw new Error('Prompt from stdin was empty.');
+          }
+        }
         const jsonPayload = await loadSendJsonPayload(flags);
         const resolvedPromptFile = jsonPayload?.promptFile ?? flags.promptFile;
-        const resolvedPromptBody = jsonPayload?.promptBody;
+        const resolvedPromptBody = jsonPayload?.promptBody ?? stdinPrompt ?? flags.prompt;
         const resolvedWorkingDir = jsonPayload?.workingDir ?? flags.workingDir;
         const resolvedPersona = jsonPayload?.persona ?? flags.persona;
         const resolvedOutputLast = jsonPayload?.outputLastPath ?? flags.outputLastPath;
