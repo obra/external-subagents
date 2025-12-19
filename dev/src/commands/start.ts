@@ -10,7 +10,7 @@ import { composePrompt } from '../lib/prompt.ts';
 import { LaunchRegistry } from '../lib/launch-registry.ts';
 import { Paths } from '../lib/paths.ts';
 import { validateSpawnedWorker } from '../lib/spawn-validation.ts';
-import type { PermissionLevel } from '../lib/backends.ts';
+import { isClaudeBackendEnabled, type PermissionLevel } from '../lib/backends.ts';
 
 export interface StartCommandOptions {
   rootDir?: string;
@@ -64,6 +64,10 @@ export async function startCommand(options: StartCommandOptions): Promise<string
   const paths = new Paths(options.rootDir ? path.resolve(options.rootDir) : undefined);
   const launchRegistry = new LaunchRegistry(paths);
   const personaCache = new Map<string, PersonaRuntime>();
+
+  if (options.backend === 'claude' && !isClaudeBackendEnabled()) {
+    throw new Error('Claude backend is disabled. Set CODEX_SUBAGENT_ENABLE_CLAUDE=1 to enable it.');
+  }
 
   if (options.manifest) {
     if (options.promptFile || options.promptBody) {

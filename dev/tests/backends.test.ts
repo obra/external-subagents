@@ -9,10 +9,34 @@ describe('backends', () => {
       expect(backend.command).toBe('codex');
     });
 
-    it('returns claude backend by name', () => {
-      const backend = getBackend('claude');
-      expect(backend.name).toBe('claude');
-      expect(backend.command).toBe('claude');
+    it('throws when claude backend is disabled', () => {
+      const prev = process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+      try {
+        delete process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+        expect(() => getBackend('claude')).toThrow('Claude backend is disabled');
+      } finally {
+        if (prev === undefined) {
+          delete process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+        } else {
+          process.env.CODEX_SUBAGENT_ENABLE_CLAUDE = prev;
+        }
+      }
+    });
+
+    it('returns claude backend when enabled', () => {
+      const prev = process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+      try {
+        process.env.CODEX_SUBAGENT_ENABLE_CLAUDE = '1';
+        const backend = getBackend('claude');
+        expect(backend.name).toBe('claude');
+        expect(backend.command).toBe('claude');
+      } finally {
+        if (prev === undefined) {
+          delete process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+        } else {
+          process.env.CODEX_SUBAGENT_ENABLE_CLAUDE = prev;
+        }
+      }
     });
 
     it('throws for unknown backend', () => {

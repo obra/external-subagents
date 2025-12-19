@@ -1,3 +1,4 @@
+import process from 'node:process';
 import path from 'node:path';
 
 /**
@@ -43,6 +44,14 @@ export interface BackendExecOptions {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+export function isClaudeBackendEnabled(): boolean {
+  const value = process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+  if (!value) {
+    return false;
+  }
+  return value === '1' || value.toLowerCase() === 'true';
 }
 
 /**
@@ -207,6 +216,11 @@ export function getBackend(name: 'codex' | 'claude'): Backend {
     case 'codex':
       return codexBackend;
     case 'claude':
+      if (!isClaudeBackendEnabled()) {
+        throw new Error(
+          'Claude backend is disabled. Set CODEX_SUBAGENT_ENABLE_CLAUDE=1 to enable it.'
+        );
+      }
       return claudeBackend;
     default:
       throw new Error(`Unknown backend: ${name}`);

@@ -385,72 +385,120 @@ describe('start command', () => {
     ).rejects.toThrow(/manifest task 0/i);
   });
 
+  it('rejects claude backend when feature flag is not enabled', async () => {
+    const prev = process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+    try {
+      delete process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+      const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-backend-disabled-'));
+      const codexRoot = path.join(root, '.codex-subagent');
+
+      await expect(
+        startCommand({
+          rootDir: codexRoot,
+          role: 'researcher',
+          permissions: 'workspace-write',
+          promptBody: 'Test with claude backend',
+          controllerId: 'controller-backend-disabled',
+          wait: true,
+          backend: 'claude',
+          cliPath: CLI_PATH,
+        })
+      ).rejects.toThrow('Claude backend is disabled');
+    } finally {
+      if (prev === undefined) {
+        delete process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+      } else {
+        process.env.CODEX_SUBAGENT_ENABLE_CLAUDE = prev;
+      }
+    }
+  });
+
   it('passes backend options to runExec when waiting', async () => {
+    const prev = process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+    process.env.CODEX_SUBAGENT_ENABLE_CLAUDE = '1';
     const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-backend-'));
     const codexRoot = path.join(root, '.codex-subagent');
 
     const fixture = await loadFixture();
     vi.mocked(runExec).mockResolvedValueOnce(fixture);
 
-    await startCommand({
-      rootDir: codexRoot,
-      role: 'researcher',
-      permissions: 'workspace-write',
-      promptBody: 'Test with claude backend',
-      controllerId: 'controller-backend',
-      wait: true,
-      backend: 'claude',
-      model: 'opus',
-      cliPath: CLI_PATH,
-    });
-
-    expect(runExec).toHaveBeenCalledWith(
-      expect.objectContaining({
+    try {
+      await startCommand({
+        rootDir: codexRoot,
+        role: 'researcher',
+        permissions: 'workspace-write',
+        promptBody: 'Test with claude backend',
+        controllerId: 'controller-backend',
+        wait: true,
         backend: 'claude',
         model: 'opus',
-        permissions: 'workspace-write',
-      })
-    );
+        cliPath: CLI_PATH,
+      });
 
-    // Verify registry records backend
-    const registryPath = path.join(codexRoot, 'state', 'threads.json');
-    const registryRaw = await readFile(registryPath, 'utf8');
-    const registry = JSON.parse(registryRaw);
-    expect(registry[fixture.thread_id].backend).toBe('claude');
+      expect(runExec).toHaveBeenCalledWith(
+        expect.objectContaining({
+          backend: 'claude',
+          model: 'opus',
+          permissions: 'workspace-write',
+        })
+      );
+
+      // Verify registry records backend
+      const registryPath = path.join(codexRoot, 'state', 'threads.json');
+      const registryRaw = await readFile(registryPath, 'utf8');
+      const registry = JSON.parse(registryRaw);
+      expect(registry[fixture.thread_id].backend).toBe('claude');
+    } finally {
+      if (prev === undefined) {
+        delete process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+      } else {
+        process.env.CODEX_SUBAGENT_ENABLE_CLAUDE = prev;
+      }
+    }
   });
 
   it('passes backend options to detached worker payload', async () => {
+    const prev = process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+    process.env.CODEX_SUBAGENT_ENABLE_CLAUDE = '1';
     const root = await mkdtemp(path.join(os.tmpdir(), 'codex-subagent-backend-detached-'));
     const codexRoot = path.join(root, '.codex-subagent');
     const promptFile = path.join(root, 'prompt.txt');
     await writeFile(promptFile, 'Detached with claude');
 
     const { stdout, output } = captureOutput();
-    await startCommand({
-      rootDir: codexRoot,
-      role: 'analyst',
-      permissions: 'workspace-write',
-      promptFile,
-      controllerId: 'controller-detached-backend',
-      stdout,
-      backend: 'claude',
-      model: 'sonnet',
-      cliPath: CLI_PATH,
-    });
+    try {
+      await startCommand({
+        rootDir: codexRoot,
+        role: 'analyst',
+        permissions: 'workspace-write',
+        promptFile,
+        controllerId: 'controller-detached-backend',
+        stdout,
+        backend: 'claude',
+        model: 'sonnet',
+        cliPath: CLI_PATH,
+      });
 
-    expect(spawnMock).toHaveBeenCalledTimes(1);
-    const spawnArgs = (spawnMock.mock.calls[0] as unknown[]) ?? [];
-    const spawnArgv = spawnArgs[1] as string[];
-    const payloadBase64 = spawnArgv[3];
-    const payloadJson = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
+      expect(spawnMock).toHaveBeenCalledTimes(1);
+      const spawnArgs = (spawnMock.mock.calls[0] as unknown[]) ?? [];
+      const spawnArgv = spawnArgs[1] as string[];
+      const payloadBase64 = spawnArgv[3];
+      const payloadJson = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
 
-    expect(payloadJson.backend).toBe('claude');
-    expect(payloadJson.model).toBe('sonnet');
-    expect(payloadJson.permissions).toBe('workspace-write');
+      expect(payloadJson.backend).toBe('claude');
+      expect(payloadJson.model).toBe('sonnet');
+      expect(payloadJson.permissions).toBe('workspace-write');
 
-    // Verify output mentions Claude
-    const detachedMessage = output.join('');
-    expect(detachedMessage).toContain('Claude may run for minutes or hours');
+      // Verify output mentions Claude
+      const detachedMessage = output.join('');
+      expect(detachedMessage).toContain('Claude may run for minutes or hours');
+    } finally {
+      if (prev === undefined) {
+        delete process.env.CODEX_SUBAGENT_ENABLE_CLAUDE;
+      } else {
+        process.env.CODEX_SUBAGENT_ENABLE_CLAUDE = prev;
+      }
+    }
   });
 
   it('defaults to codex backend when not specified', async () => {

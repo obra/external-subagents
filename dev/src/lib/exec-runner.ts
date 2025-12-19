@@ -1,5 +1,8 @@
 import path from 'node:path';
+import os from 'node:os';
 import { readFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, unlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execa } from 'execa';
 import type { ExecaError } from 'execa';
@@ -65,9 +68,13 @@ export async function runExec(options: ExecOptions): Promise<ExecResult> {
     promptBody = options.transformPrompt(promptBody);
   }
 
+  const env = await buildBackendEnv(backend.name);
+
   // Stream stdout to count lines for progress reporting
   const lines: string[] = [];
-  const child = execa(backend.command, args, { input: promptBody });
+  const child = env
+    ? execa(backend.command, args, { input: promptBody, env })
+    : execa(backend.command, args, { input: promptBody });
 
   if (child.stdout && options.onProgress) {
     let buffer = '';
@@ -163,6 +170,106 @@ export async function runExec(options: ExecOptions): Promise<ExecResult> {
     messages,
     last_message_id: messages.at(-1)?.id,
   };
+}
+
+let cachedCodexHomeOverride: string | null | undefined;
+
+async function buildBackendEnv(backendName: string): Promise<NodeJS.ProcessEnv | undefined> {
+  if (backendName !== 'codex') {
+    return undefined;
+  }
+
+  const codexHomeOverride = await resolveCodexHomeOverride();
+  if (!codexHomeOverride) {
+    return undefined;
+  }
+
+  return { ...process.env, CODEX_HOME: codexHomeOverride };
+}
+
+async function resolveCodexHomeOverride(): Promise<string | undefined> {
+  const explicit = process.env.CODEX_HOME;
+  if (explicit && explicit.trim().length > 0) {
+    return undefined;
+  }
+
+  if (cachedCodexHomeOverride !== undefined) {
+    return cachedCodexHomeOverride ?? undefined;
+  }
+
+  const defaultCodexHome = path.join(os.homedir(), '.codex');
+  const writable = await isDirectoryWritable(defaultCodexHome);
+  if (writable) {
+    cachedCodexHomeOverride = null;
+    return undefined;
+  }
+
+  const localCodexHome = path.resolve(process.cwd(), '.codex-home');
+  await mkdir(localCodexHome, { recursive: true });
+  await copyCodexAuthFiles(defaultCodexHome, localCodexHome);
+
+  cachedCodexHomeOverride = localCodexHome;
+  return localCodexHome;
+}
+
+async function copyCodexAuthFiles(fromCodexHome: string, toCodexHome: string): Promise<void> {
+  for (const filename of ['auth.json', 'config.toml']) {
+    const src = path.join(fromCodexHome, filename);
+    const dest = path.join(toCodexHome, filename);
+    const destExists = await fileExists(dest);
+    if (destExists) {
+      continue;
+    }
+    const srcExists = await fileExists(src);
+    if (!srcExists) {
+      continue;
+    }
+    try {
+      await copyFile(src, dest);
+    } catch {
+      // Best-effort: if home reads are blocked, codex will report auth errors.
+    }
+  }
+}
+
+async function isDirectoryWritable(dir: string): Promise<boolean> {
+  try {
+    await mkdir(dir, { recursive: true });
+    await access(dir, constants.W_OK);
+    const probePath = path.join(dir, '.codex-subagent-write-probe');
+    try {
+      await writeFile(probePath, 'probe', { encoding: 'utf8' });
+    } finally {
+      try {
+        await unlink(probePath);
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    return true;
+  } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      return false;
+    }
+    return false;
+  }
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isPermissionDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  return code === 'EACCES' || code === 'EPERM';
 }
 
 function formatExecError(error: unknown, backend: Backend): Error {

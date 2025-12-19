@@ -100,6 +100,8 @@ Relative paths inside the JSON payload are resolved against the file’s directo
 - **Where errors live:** Every detached `start`/`send` attempt writes a record to `.codex-subagent/state/launches.json` until Codex produces a thread turn. If launch fails (missing profile, sandbox denial, etc.), the CLI preserves the full stderr/stack under `.codex-subagent/state/launch-errors/<launch-id>.log` and `list` marks the attempt as `NOT RUNNING`.
 - **How to detect issues:** Run `codex-subagent list` after launching helpers. If the `Launch diagnostics` section shows a pending attempt with the warning “still waiting for Codex (no thread yet),” Codex hasn’t even started—re-run the prompt or inspect the log file. Failed entries include the exact error plus the log path so you can fix the root cause before retrying.
 - **Thread failures after resume:** When a detached `send` fails, the owning thread’s status flips to `NOT RUNNING` and the reason appears via `list` + `status`. `status --thread <id>` now prints the failure message directly, so you can summarize the issue without re-reading the log.
+- **Home directory sandboxing:** If the environment blocks writes to `~/.codex` (common under workspace-only sandboxes), `codex-subagent` automatically runs `codex exec` with `CODEX_HOME=./.codex-home` (created in the current working directory) and best-effort copies `~/.codex/auth.json` + `~/.codex/config.toml` into it. `.codex-home/` is gitignored but contains credentials—treat it like a secret.
+- **Claude backend (optional):** Claude support is behind a feature flag. Set `CODEX_SUBAGENT_ENABLE_CLAUDE=1` to use `--backend claude`.
 
 ### Demo
 
