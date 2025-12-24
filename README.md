@@ -23,7 +23,7 @@ codex-subagent <command> [options]
 Clone this repository to `~/.codex/skills/using-subagents-as-codex/`:
 
 ```bash
-git clone https://github.com/YOUR_ORG/using-subagents-as-codex ~/.codex/skills/using-subagents-as-codex
+git clone https://github.com/obra/external-subagents ~/.codex/skills/using-subagents-as-codex
 cd ~/.codex/skills/using-subagents-as-codex/dev
 npm install
 npm run build
